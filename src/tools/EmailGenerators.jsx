@@ -1,5 +1,13 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import s from './shared.module.css'
+
+// Convert generator output (plain text with **bold** markers and \n) to HTML
+function textToHtml(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br />')
+}
 
 const EMAIL_TABS = [
   { id: 'premarket', label: 'Premarket Update' },
@@ -123,19 +131,29 @@ export default function EmailGenerators() {
   const [activeTab, setActiveTab] = useState('premarket')
   const [fields, setFields] = useState({ ...DEFAULTS })
   const [copied, setCopied] = useState(false)
-  // Per-tab overrides: if a key exists here, it wins over the generated template.
-  // Cleared only by "Reset to Template" or tab-specific regenerate.
+  // Per-tab overrides store HTML (from the contentEditable). Presence of a key
+  // means the user has manually edited this tab; absence means show the
+  // generator output live.
   const [overrides, setOverrides] = useState({})
-  const outputRef = useRef(null)
+  const editorRef = useRef(null)
 
   const updateField = (key, value) => setFields(prev => ({ ...prev, [key]: value }))
 
   const generatedEmail = GENERATORS[activeTab] ? GENERATORS[activeTab](fields) : ''
+  const generatedHtml = textToHtml(generatedEmail)
   const isEdited = overrides[activeTab] != null
-  const emailOutput = isEdited ? overrides[activeTab] : generatedEmail
+  const displayHtml = isEdited ? overrides[activeTab] : generatedHtml
 
-  const handleEdit = (e) => {
-    setOverrides(prev => ({ ...prev, [activeTab]: e.target.value }))
+  // Sync displayHtml → DOM only when the target differs. User-edit updates are
+  // no-ops here because the DOM already matches after the keystroke.
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== displayHtml) {
+      editorRef.current.innerHTML = displayHtml
+    }
+  }, [displayHtml, activeTab])
+
+  const handleInput = (e) => {
+    setOverrides(prev => ({ ...prev, [activeTab]: e.currentTarget.innerHTML }))
   }
 
   const handleReset = () => {
@@ -147,16 +165,39 @@ export default function EmailGenerators() {
   }
 
   const handleCopy = async () => {
-    const output = emailOutput.replace(/\*\*(.+?)\*\*/g, '$1')
+    if (!editorRef.current) return
+    const html = editorRef.current.innerHTML
+    const text = editorRef.current.innerText
     try {
-      await navigator.clipboard.writeText(output)
+      // Write both HTML and plain text so pasting into Gmail/Outlook preserves bold/italic,
+      // while pasting into plain-text fields still works.
+      if (window.ClipboardItem && navigator.clipboard?.write) {
+        const item = new window.ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        })
+        await navigator.clipboard.write([item])
+      } else {
+        await navigator.clipboard.writeText(text)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      if (outputRef.current) {
-        outputRef.current.focus()
-        outputRef.current.select()
-      }
+      // Last-resort fallback: select the text so user can Ctrl+C
+      const range = document.createRange()
+      range.selectNodeContents(editorRef.current)
+      window.getSelection()?.removeAllRanges()
+      window.getSelection()?.addRange(range)
+    }
+  }
+
+  // Rich-text formatting commands for the toolbar
+  const exec = (cmd) => {
+    editorRef.current?.focus()
+    document.execCommand(cmd, false, null)
+    // capture the result back to state so it persists as an override
+    if (editorRef.current) {
+      setOverrides(prev => ({ ...prev, [activeTab]: editorRef.current.innerHTML }))
     }
   }
 
@@ -220,10 +261,31 @@ export default function EmailGenerators() {
               <button className={s.btnSecondary} onClick={handleCopy}>{copied ? 'Copied!' : 'Copy to Clipboard'}</button>
             </div>
           </div>
-          <textarea
-            ref={outputRef}
-            value={emailOutput}
-            onChange={handleEdit}
+          <div style={{ display: 'flex', gap: 4, padding: '0 16px 8px' }}>
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); exec('bold') }}
+              style={{ fontFamily: 'inherit', fontWeight: 700, fontSize: 12, padding: '4px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', cursor: 'pointer' }}
+              title="Bold (Ctrl+B)"
+            >B</button>
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); exec('italic') }}
+              style={{ fontFamily: 'inherit', fontStyle: 'italic', fontSize: 12, padding: '4px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', cursor: 'pointer' }}
+              title="Italic (Ctrl+I)"
+            >I</button>
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); exec('underline') }}
+              style={{ fontFamily: 'inherit', textDecoration: 'underline', fontSize: 12, padding: '4px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', cursor: 'pointer' }}
+              title="Underline (Ctrl+U)"
+            >U</button>
+          </div>
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={handleInput}
             style={{
               flex: 1,
               margin: '0 16px 16px',
@@ -235,10 +297,10 @@ export default function EmailGenerators() {
               background: 'var(--bg)',
               border: '1px solid var(--border)',
               borderRadius: 6,
-              resize: 'none',
               outline: 'none',
               overflowY: 'auto',
               wordWrap: 'break-word',
+              whiteSpace: 'pre-wrap',
             }}
           />
         </div>
