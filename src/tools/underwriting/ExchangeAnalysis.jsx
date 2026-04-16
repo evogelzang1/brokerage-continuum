@@ -148,7 +148,7 @@ body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;
 .banner span{font-size:7.5px;opacity:.7}
 .meta{font-size:8.5px;color:#6e7378;margin-bottom:6px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.section{font-size:8px;font-weight:700;color:#00529b;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:3px 0 1px;margin:4px 0 2px}
+.section{font-size:8px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:3px 0 1px;margin:4px 0 2px}
 .row{display:flex;justify-content:space-between;padding:1px 3px;font-size:8.5px;line-height:1.25}
 .row span:first-child{color:#6e7378}.row span:last-child{font-weight:600}
 .alt{background:#f5f7fa}

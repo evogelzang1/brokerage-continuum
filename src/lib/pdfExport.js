@@ -36,7 +36,7 @@ body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.35
 .banner span{font-size:8px;opacity:.75}
 .meta{font-size:9px;color:#6e7378;margin-bottom:10px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.section{font-size:9px;font-weight:700;color:#00529b;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:4px 0 2px;margin:8px 0 3px}
+.section{font-size:9px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:4px 0 2px;margin:8px 0 3px}
 .row{display:flex;justify-content:space-between;padding:2px 4px;font-size:9.5px;line-height:1.3}
 .row:nth-child(even){background:#f5f7fa}
 .row span:first-child{color:#6e7378}.row span:last-child{font-weight:600}
