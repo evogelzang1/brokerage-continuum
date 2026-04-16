@@ -135,3 +135,85 @@
 .noteInput::placeholder {
   color: var(--text-subtle);
 }
+
+.removeBtn {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 6px;
+  transition: color 0.15s;
+}
+
+.removeBtn:hover {
+  color: var(--red);
+}
+
+.addBtn {
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: none;
+  border: 1px dashed var(--border);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: all 0.15s;
+}
+
+.addBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-top: 6px;
+  background: var(--bg-hover);
+  border-radius: 6px;
+}
+
+.addLabelInput {
+  flex: 1;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.addLabelInput:focus {
+  border-color: var(--accent);
+}
+
+.addOffsetInput {
+  width: 140px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.addOffsetInput:focus {
+  border-color: var(--accent);
+}
+
+.addLabelInput::placeholder,
+.addOffsetInput::placeholder {
+  color: var(--text-subtle);
+}

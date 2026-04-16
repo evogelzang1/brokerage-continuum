@@ -59,22 +59,103 @@ function daysUntil(dueDate) {
   return Math.ceil((dueDate - now) / 86400000)
 }
 
+function makeId() {
+  return 'custom-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7)
+}
+
 export default function ListingChecklist() {
   const [listDate, setListDate] = useState('')
   const [propertyAddress, setPropertyAddress] = useState('')
   const [checked, setChecked] = useState({})
   const [notes, setNotes] = useState({})
+  // Custom items keyed by category name: { [catName]: [{ id, label, dueOffset }] }
+  const [customItems, setCustomItems] = useState({})
+  // Inline add form state
+  const [addingTo, setAddingTo] = useState(null)      // category name or null
+  const [newLabel, setNewLabel] = useState('')
+  const [newOffset, setNewOffset] = useState('')
 
   const toggleItem = id => setChecked(prev => ({ ...prev, [id]: !prev[id] }))
   const setNote = (id, val) => setNotes(prev => ({ ...prev, [id]: val }))
 
+  const startAdd = (cat) => {
+    setAddingTo(cat)
+    setNewLabel('')
+    setNewOffset('')
+  }
+
+  const cancelAdd = () => {
+    setAddingTo(null)
+    setNewLabel('')
+    setNewOffset('')
+  }
+
+  const commitAdd = (cat) => {
+    const label = newLabel.trim()
+    if (!label) { cancelAdd(); return }
+    const offset = newOffset === '' ? null : Number(newOffset)
+    const item = { id: makeId(), label, dueOffset: Number.isFinite(offset) ? offset : null }
+    setCustomItems(prev => ({ ...prev, [cat]: [...(prev[cat] || []), item] }))
+    cancelAdd()
+  }
+
+  const removeCustom = (cat, id) => {
+    setCustomItems(prev => ({ ...prev, [cat]: (prev[cat] || []).filter(i => i.id !== id) }))
+    setChecked(prev => { const n = { ...prev }; delete n[id]; return n })
+    setNotes(prev => { const n = { ...prev }; delete n[id]; return n })
+  }
+
   const stats = useMemo(() => {
-    const total = CHECKLIST_ITEMS.reduce((sum, cat) => sum + cat.items.length, 0)
+    const defaultCount = CHECKLIST_ITEMS.reduce((sum, cat) => sum + cat.items.length, 0)
+    const customCount = Object.values(customItems).reduce((sum, arr) => sum + arr.length, 0)
+    const total = defaultCount + customCount
     const done = Object.values(checked).filter(Boolean).length
     return { total, done, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
-  }, [checked])
+  }, [checked, customItems])
 
   const listDateObj = listDate ? new Date(listDate) : null
+
+  const handleReset = () => {
+    setChecked({})
+    setNotes({})
+    setCustomItems({})
+    cancelAdd()
+  }
+
+  const renderItem = (item, categoryName, isCustom) => {
+    const dueDate = listDateObj && item.dueOffset != null
+      ? new Date(listDateObj.getTime() + item.dueOffset * 86400000)
+      : null
+    const days = dueDate ? daysUntil(dueDate) : null
+    const overdue = days !== null && days < 0 && !checked[item.id]
+    const dueSoon = days !== null && days >= 0 && days <= 2 && !checked[item.id]
+
+    return (
+      <div key={item.id} className={`${styles.item} ${checked[item.id] ? styles.itemDone : ''} ${overdue ? styles.itemOverdue : ''}`}>
+        <label className={styles.checkbox}>
+          <input type="checkbox" checked={!!checked[item.id]} onChange={() => toggleItem(item.id)} />
+          <span className={styles.itemLabel}>{item.label}</span>
+        </label>
+        <div className={styles.itemMeta}>
+          {dueDate && (
+            <span className={`${styles.dueDate} ${overdue ? styles.overdue : ''} ${dueSoon ? styles.dueSoon : ''}`}>
+              {checked[item.id] ? 'Done' : overdue ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `Due ${formatDate(dueDate)}`}
+            </span>
+          )}
+          <input className={styles.noteInput} placeholder="Notes..." value={notes[item.id] || ''} onChange={e => setNote(item.id, e.target.value)} />
+          {isCustom && (
+            <button
+              className={styles.removeBtn}
+              onClick={() => removeCustom(categoryName, item.id)}
+              title="Remove this item"
+            >
+              &times;
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={s.toolPage}>
@@ -85,7 +166,7 @@ export default function ListingChecklist() {
         </div>
         <div className={s.headerBtns}>
           <span className={styles.progress}>{stats.done}/{stats.total} ({stats.pct}%)</span>
-          <button className={s.btnDanger} onClick={() => { setChecked({}); setNotes({}) }}>Reset</button>
+          <button className={s.btnDanger} onClick={handleReset}>Reset</button>
         </div>
       </div>
 
@@ -104,34 +185,51 @@ export default function ListingChecklist() {
         <div className={styles.progressFill} style={{ width: `${stats.pct}%` }} />
       </div>
 
-      {CHECKLIST_ITEMS.map(category => (
-        <div key={category.category} className={styles.category}>
-          <div className={styles.categoryTitle}>{category.category}</div>
-          {category.items.map(item => {
-            const dueDate = listDateObj ? new Date(listDateObj.getTime() + item.dueOffset * 86400000) : null
-            const days = dueDate ? daysUntil(dueDate) : null
-            const overdue = days !== null && days < 0 && !checked[item.id]
-            const dueSoon = days !== null && days >= 0 && days <= 2 && !checked[item.id]
+      {CHECKLIST_ITEMS.map(category => {
+        const custom = customItems[category.category] || []
+        const isAdding = addingTo === category.category
 
-            return (
-              <div key={item.id} className={`${styles.item} ${checked[item.id] ? styles.itemDone : ''} ${overdue ? styles.itemOverdue : ''}`}>
-                <label className={styles.checkbox}>
-                  <input type="checkbox" checked={!!checked[item.id]} onChange={() => toggleItem(item.id)} />
-                  <span className={styles.itemLabel}>{item.label}</span>
-                </label>
-                <div className={styles.itemMeta}>
-                  {dueDate && (
-                    <span className={`${styles.dueDate} ${overdue ? styles.overdue : ''} ${dueSoon ? styles.dueSoon : ''}`}>
-                      {checked[item.id] ? 'Done' : overdue ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `Due ${formatDate(dueDate)}`}
-                    </span>
-                  )}
-                  <input className={styles.noteInput} placeholder="Notes..." value={notes[item.id] || ''} onChange={e => setNote(item.id, e.target.value)} />
-                </div>
+        return (
+          <div key={category.category} className={styles.category}>
+            <div className={styles.categoryTitle}>{category.category}</div>
+            {category.items.map(item => renderItem(item, category.category, false))}
+            {custom.map(item => renderItem(item, category.category, true))}
+
+            {isAdding ? (
+              <div className={styles.addRow}>
+                <input
+                  className={styles.addLabelInput}
+                  placeholder="Task description..."
+                  value={newLabel}
+                  onChange={e => setNewLabel(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitAdd(category.category)
+                    if (e.key === 'Escape') cancelAdd()
+                  }}
+                  autoFocus
+                />
+                <input
+                  className={styles.addOffsetInput}
+                  placeholder="Due (days from list)"
+                  type="number"
+                  value={newOffset}
+                  onChange={e => setNewOffset(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitAdd(category.category)
+                    if (e.key === 'Escape') cancelAdd()
+                  }}
+                />
+                <button className={s.btnPrimary} onClick={() => commitAdd(category.category)}>Add</button>
+                <button className={s.btnDanger} onClick={cancelAdd}>Cancel</button>
               </div>
-            )
-          })}
-        </div>
-      ))}
+            ) : (
+              <button className={styles.addBtn} onClick={() => startAdd(category.category)}>
+                + Add item
+              </button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
