@@ -123,11 +123,28 @@ export default function EmailGenerators() {
   const [activeTab, setActiveTab] = useState('premarket')
   const [fields, setFields] = useState({ ...DEFAULTS })
   const [copied, setCopied] = useState(false)
+  // Per-tab overrides: if a key exists here, it wins over the generated template.
+  // Cleared only by "Reset to Template" or tab-specific regenerate.
+  const [overrides, setOverrides] = useState({})
   const outputRef = useRef(null)
 
   const updateField = (key, value) => setFields(prev => ({ ...prev, [key]: value }))
 
-  const emailOutput = GENERATORS[activeTab] ? GENERATORS[activeTab](fields) : ''
+  const generatedEmail = GENERATORS[activeTab] ? GENERATORS[activeTab](fields) : ''
+  const isEdited = overrides[activeTab] != null
+  const emailOutput = isEdited ? overrides[activeTab] : generatedEmail
+
+  const handleEdit = (e) => {
+    setOverrides(prev => ({ ...prev, [activeTab]: e.target.value }))
+  }
+
+  const handleReset = () => {
+    setOverrides(prev => {
+      const next = { ...prev }
+      delete next[activeTab]
+      return next
+    })
+  }
 
   const handleCopy = async () => {
     const output = emailOutput.replace(/\*\*(.+?)\*\*/g, '$1')
@@ -137,10 +154,8 @@ export default function EmailGenerators() {
       setTimeout(() => setCopied(false), 2000)
     } catch {
       if (outputRef.current) {
-        const range = document.createRange()
-        range.selectNodeContents(outputRef.current)
-        window.getSelection()?.removeAllRanges()
-        window.getSelection()?.addRange(range)
+        outputRef.current.focus()
+        outputRef.current.select()
       }
     }
   }
@@ -192,15 +207,38 @@ export default function EmailGenerators() {
         </div>
 
         <div className={s.panel}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 14 }}>
-            <div className={s.panelHeader}>Preview</div>
-            <button className={s.btnSecondary} onClick={handleCopy}>{copied ? 'Copied!' : 'Copy to Clipboard'}</button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 14, gap: 8 }}>
+            <div className={s.panelHeader}>
+              Editable Preview {isEdited && <span style={{ color: 'var(--yellow)', fontSize: 10, marginLeft: 6 }}>● edited</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {isEdited && (
+                <button className={s.btnDanger} onClick={handleReset} title="Discard edits and regenerate from form fields">
+                  Reset to Template
+                </button>
+              )}
+              <button className={s.btnSecondary} onClick={handleCopy}>{copied ? 'Copied!' : 'Copy to Clipboard'}</button>
+            </div>
           </div>
-          <div ref={outputRef} style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px', fontSize: 13, color: 'var(--text)', lineHeight: 1.8, wordWrap: 'break-word' }}
-            dangerouslySetInnerHTML={{ __html: emailOutput
-              .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-              .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-              .replace(/\n/g, '<br />')
+          <textarea
+            ref={outputRef}
+            value={emailOutput}
+            onChange={handleEdit}
+            style={{
+              flex: 1,
+              margin: '0 16px 16px',
+              padding: '12px 14px',
+              fontFamily: 'inherit',
+              fontSize: 13,
+              lineHeight: 1.8,
+              color: 'var(--text)',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              resize: 'none',
+              outline: 'none',
+              overflowY: 'auto',
+              wordWrap: 'break-word',
             }}
           />
         </div>
