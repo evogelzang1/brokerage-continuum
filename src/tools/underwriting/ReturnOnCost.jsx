@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import CurrencyInput from '../CurrencyInput'
+import { exportToolPdf } from '../../lib/pdfExport'
 import s from '../shared.module.css'
 
 const fmt$ = v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -26,6 +27,29 @@ export default function ReturnOnCost() {
 
   const spreadClass = calc.yieldSpread >= 0 ? s.positive : s.negative
 
+  const handleExport = () => {
+    exportToolPdf({
+      title: 'Return on Cost',
+      subtitle: 'Value-Add / Development Yield Analysis',
+      inputs: [
+        { label: 'Acquisition Price', value: fmt$(f.acquisitionPrice) },
+        { label: 'Closing Costs', value: fmt$(f.closingCosts) },
+        { label: 'Rehab / CapEx', value: fmt$(f.rehabCapex) },
+        { label: 'Total Project Cost', value: fmt$(calc.totalCost) },
+        { label: 'In-Place NOI', value: fmt$(f.inPlaceNOI) },
+        { label: 'Stabilized NOI', value: fmt$(f.stabilizedNOI) },
+        { label: 'Market Cap Rate', value: `${f.marketCapRate}%` },
+      ],
+      outputs: [
+        { label: 'In-Place Yield', value: fmtPct(calc.inPlaceYield) },
+        { label: 'Return on Cost', value: fmtPct(calc.returnOnCost) },
+        { label: 'Implied Value at Market Cap', value: fmt$(calc.impliedValue) },
+        { label: 'Profit on Cost', value: fmt$(calc.profitOnCost) },
+        { label: 'Yield Spread vs Market', value: `${fmtPct(calc.yieldSpread)} (${fmtBps(calc.yieldSpreadBps)})` },
+      ],
+    })
+  }
+
   return (
     <>
       <div className={s.inputGrid}>
@@ -44,6 +68,9 @@ export default function ReturnOnCost() {
         <div className={s.outputRow}><span className={s.outputLabel}>Implied Value</span><span className={s.outputValue}>{fmt$(calc.impliedValue)}</span></div>
         <div className={s.outputRow}><span className={s.outputLabel}>Profit on Cost</span><span className={`${s.outputValue} ${calc.profitOnCost >= 0 ? s.positive : s.negative}`}>{fmt$(calc.profitOnCost)}</span></div>
         <div className={s.outputRow}><span className={s.outputLabel}>Yield Spread</span><span className={`${s.outputValue} ${spreadClass}`}>{fmtPct(calc.yieldSpread)} ({fmtBps(calc.yieldSpreadBps)})</span></div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+        <button className={s.btnPrimary} onClick={handleExport}>Export PDF</button>
       </div>
     </>
   )

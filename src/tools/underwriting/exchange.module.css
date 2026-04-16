@@ -120,3 +120,158 @@
   font-weight: 600;
   color: var(--text);
 }
+
+/* Split layout */
+.splitLayout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.inputPane {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Preview pane */
+.preview {
+  width: 380px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  position: sticky;
+  top: 0;
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-hover);
+}
+
+.previewTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.previewBody {
+  padding: 0;
+  max-height: 700px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  font-size: 10px;
+}
+
+.pvBanner {
+  background: #101828;
+  color: #fff;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pvBannerTitle { font-weight: 700; font-size: 11px; }
+.pvBannerSub { font-size: 8px; opacity: 0.7; }
+
+.pvMeta {
+  padding: 6px 14px;
+  font-size: 9px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.pvSection {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 8px 14px 4px;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+
+.pvRows {
+  padding: 4px 14px;
+}
+
+.pvRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-size: 9px;
+  color: var(--text);
+}
+
+.pvRow span:first-child { color: var(--text-muted); }
+.pvRow span:last-child { font-weight: 600; }
+
+.pvRowHL {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+.pvRowHL span:last-child { color: var(--green); font-weight: 700; }
+
+.pvDeadlines {
+  display: flex;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pvDeadlines > div {
+  flex: 1;
+  background: var(--bg);
+  border-radius: 4px;
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 8px;
+}
+
+.pvDeadlines span:first-child { color: var(--text-muted); font-weight: 600; }
+.pvDeadlines span:last-child { color: var(--yellow); font-weight: 700; font-size: 9px; }
+
+.pvTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+  margin-top: 4px;
+}
+
+.pvTable th {
+  font-weight: 700;
+  text-align: right;
+  padding: 3px 8px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.pvTable th:first-child { text-align: left; }
+
+.pvTable td {
+  text-align: right;
+  padding: 3px 8px;
+  color: var(--text);
+}
+
+.pvTable td:first-child { text-align: left; }
+.pvMetricLabel { color: var(--text-muted) !important; font-weight: 500; }
+.pvRowAlt { background: var(--bg); }
+
+.pvFooter {
+  padding: 8px 14px;
+  font-size: 7px;
+  color: var(--text-subtle);
+  border-top: 1px solid var(--border);
+}

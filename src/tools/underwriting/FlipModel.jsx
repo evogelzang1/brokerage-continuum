@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import CurrencyInput from '../CurrencyInput'
+import { exportToolPdf } from '../../lib/pdfExport'
 import s from '../shared.module.css'
 
 const fmt$ = v => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -27,6 +28,31 @@ export default function FlipModel() {
 
   const profitClass = calc.netProfit >= 0 ? s.positive : s.negative
 
+  const handleExport = () => {
+    exportToolPdf({
+      title: 'Flip Model',
+      subtitle: 'Buy / Rehab / Sell Analysis',
+      inputs: [
+        { label: 'Acquisition Price', value: fmt$(f.acquisitionPrice) },
+        { label: 'Closing Costs (Buy)', value: fmt$(f.closingCosts) },
+        { label: 'Rehab / CapEx Budget', value: fmt$(f.rehabBudget) },
+        { label: 'Hold Period', value: `${f.holdPeriod} months` },
+        { label: 'Monthly Hold Costs', value: fmt$(f.monthlyHoldCosts) },
+        { label: 'Projected Sale Price', value: fmt$(f.projectedSalePrice) },
+        { label: 'Selling Costs', value: `${f.sellingCostsPct}%` },
+      ],
+      outputs: [
+        { label: 'Total Investment', value: fmt$(calc.totalInvestment) },
+        { label: 'Gross Profit', value: fmt$(calc.grossProfit) },
+        { label: 'Selling Costs ($)', value: fmt$(calc.sellingCostsDollar) },
+        { label: 'Net Profit', value: fmt$(calc.netProfit) },
+        { label: 'ROI', value: fmtPct(calc.roi) },
+        { label: 'Annualized ROI', value: fmtPct(calc.annualizedRoi) },
+        { label: 'Profit / Month', value: fmt$(calc.profitPerMonth) },
+      ],
+    })
+  }
+
   return (
     <>
       <div className={s.inputGrid}>
@@ -46,6 +72,9 @@ export default function FlipModel() {
         <div className={s.outputRow}><span className={s.outputLabel}>ROI</span><span className={`${s.outputValue} ${profitClass}`}>{fmtPct(calc.roi)}</span></div>
         <div className={s.outputRow}><span className={s.outputLabel}>Annualized ROI</span><span className={`${s.outputValue} ${profitClass}`}>{fmtPct(calc.annualizedRoi)}</span></div>
         <div className={s.outputRow}><span className={s.outputLabel}>Profit / Month</span><span className={`${s.outputValue} ${profitClass}`}>{fmt$(calc.profitPerMonth)}</span></div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+        <button className={s.btnPrimary} onClick={handleExport}>Export PDF</button>
       </div>
     </>
   )
