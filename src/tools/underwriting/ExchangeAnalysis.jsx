@@ -138,33 +138,54 @@ export default function ExchangeAnalysis() {
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>1031 Exchange Analysis</title>
 <style>
-@page{margin:.6in}body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;max-width:740px;margin:0 auto;padding:30px;line-height:1.5;font-size:11px}
-.banner{background:#101828;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;border-radius:4px;margin-bottom:6px}
-.banner h1{font-size:15px;margin:0}.banner span{font-size:9px;opacity:.7}
-.meta{font-size:10px;color:#6e7378;margin-bottom:16px}
-.section{font-size:10px;font-weight:700;color:#00529b;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:6px 0 3px;margin:14px 0 6px}
-.rows{margin-bottom:8px}.row{display:flex;justify-content:space-between;padding:2px 4px;font-size:10px}.row span:first-child{color:#6e7378}.row span:last-child{font-weight:600}
-.hl{border-top:1px solid #d0d7de;margin-top:4px;padding-top:4px}.hl span:last-child{color:#22783c;font-weight:700}
-.deadlines{display:flex;gap:10px;margin:10px 0}.deadlines>div{flex:1;background:#f5f7fa;border-radius:4px;padding:6px;text-align:center;font-size:9px}
-.deadlines span:first-child{color:#6e7378;font-weight:600;display:block}.deadlines span:last-child{color:#9a6700;font-weight:700;font-size:10px}
-table{width:100%;border-collapse:collapse;font-size:10px;margin-top:4px}th{text-align:right;padding:3px 6px;font-weight:700;border-bottom:1px solid #d0d7de}
-th:first-child{text-align:left}td{text-align:right;padding:3px 6px}td:first-child{text-align:left;color:#6e7378}
-.alt{background:#f5f7fa}.footer{margin-top:20px;font-size:8px;color:#999;border-top:1px solid #d0d7de;padding-top:6px}
-</style></head><body>
+@page{size:letter;margin:.3in}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:9px}
+.wrap{max-width:7.9in;margin:0 auto}
+.banner{background:#101828;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:4px}
+.banner h1{font-size:12px;margin:0;font-weight:700}
+.banner span{font-size:7.5px;opacity:.7}
+.meta{font-size:8.5px;color:#6e7378;margin-bottom:6px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.section{font-size:8px;font-weight:700;color:#00529b;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:3px 0 1px;margin:4px 0 2px}
+.row{display:flex;justify-content:space-between;padding:1px 3px;font-size:8.5px;line-height:1.25}
+.row span:first-child{color:#6e7378}.row span:last-child{font-weight:600}
+.alt{background:#f5f7fa}
+.hl{border-top:1px solid #d0d7de;margin-top:2px;padding-top:2px}
+.hl span:last-child{color:#22783c;font-weight:700}
+.deadlines{display:flex;gap:6px;margin:6px 0}
+.deadlines>div{flex:1;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:3px 5px;text-align:center}
+.deadlines span:first-child{color:#6e7378;font-weight:600;display:block;font-size:7.5px}
+.deadlines span:last-child{color:#9a6700;font-weight:700;font-size:9px}
+table{width:100%;border-collapse:collapse;font-size:8px;margin-top:3px}
+th{text-align:right;padding:2px 4px;font-weight:700;border-bottom:1px solid #d0d7de;background:#f5f7fa}
+th:first-child{text-align:left}
+td{text-align:right;padding:2px 4px;font-size:8px}
+td:first-child{text-align:left;color:#6e7378;font-weight:500}
+tr.alt{background:#fafbfc}
+.footer{margin-top:6px;font-size:7px;color:#999;border-top:1px solid #d0d7de;padding-top:3px;text-align:center}
+</style></head><body><div class="wrap">
 <div class="banner"><h1>1031 EXCHANGE ANALYSIS</h1><span>Matthews Real Estate Investment Services</span></div>
 <div class="meta">Prepared for: ${clientName} &mdash; ${dateStr}</div>
-<div class="section">RELINQUISHED PROPERTY</div>
-<div class="rows">${subRows.map(([l,v])=>`<div class="row"><span>${l}</span><span>${v}</span></div>`).join('')}
-<div class="row hl"><span>Total Equity for 1031</span><span>${fmt$(calc.equity1031)}</span></div></div>
-<div class="section">TAX DEFERRAL</div>
-<div class="rows">${taxRows.map(([l,v])=>`<div class="row"><span>${l}</span><span>${v}</span></div>`).join('')}
-<div class="row hl"><span>Tax Saved via 1031</span><span>${fmt$(calc.taxSaved)}</span></div></div>
+<div class="grid">
+<div>
+<div class="section">Relinquished Property</div>
+${subRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><span>${v}</span></div>`).join('')}
+<div class="row hl"><span>Total Equity for 1031</span><span>${fmt$(calc.equity1031)}</span></div>
+</div>
+<div>
+<div class="section">Tax Deferral</div>
+${taxRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><span>${v}</span></div>`).join('')}
+<div class="row hl"><span>Tax Saved via 1031</span><span>${fmt$(calc.taxSaved)}</span></div>
 <div class="deadlines"><div><span>45-Day ID</span><span>${fmtDate(calc.id45)}</span></div><div><span>180-Day Close</span><span>${fmtDate(calc.close180)}</span></div></div>
-<div class="section">REPLACEMENT PROPERTIES ${replDebt ? '(WITH DEBT)' : '(ALL CASH)'}</div>
+</div>
+</div>
+<div class="section">Replacement Properties ${replDebt ? '(With Debt)' : '(All Cash)'}</div>
 <table><thead><tr><th></th>${repls.map((r,i)=>`<th>${r.name||'Option '+(i+1)}</th>`).join('')}</tr></thead>
 <tbody>${replMetrics.map(([l,fn],ri)=>`<tr class="${ri%2===0?'alt':''}"><td>${l}</td>${calc.options.map(o=>`<td>${fn(o)}</td>`).join('')}</tr>`).join('')}</tbody></table>
 <div class="footer">For analysis purposes only. Consult a qualified tax/legal professional. &mdash; Matthews REIS</div>
-</body></html>`
+</div></body></html>`
 
     openHtml(html)
   }
