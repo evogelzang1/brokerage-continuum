@@ -106,18 +106,18 @@ export default function FlipModel() {
       <div className={styles.inputPane}>
         <div className={s.sectionLabel}>Purchase & Rehab</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="Acquisition Price" value={f.acquisitionPrice} onChange={v => set('acquisitionPrice', v)} />
-          <CurrencyInput label="Closing Costs %" value={f.closingCostsPct} onChange={v => set('closingCostsPct', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Rehab Budget" value={f.rehabBudget} onChange={v => set('rehabBudget', v)} />
-          <CurrencyInput label="Contingency %" value={f.contingencyPct} onChange={v => set('contingencyPct', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Acquisition Price" hint="What you're paying for the property." value={f.acquisitionPrice} onChange={v => set('acquisitionPrice', v)} />
+          <CurrencyInput label="Closing Costs %" hint="Title, escrow, lender fees. Typically 1–3%." value={f.closingCostsPct} onChange={v => set('closingCostsPct', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Rehab Budget" hint="Hard construction costs — materials + labor." value={f.rehabBudget} onChange={v => set('rehabBudget', v)} />
+          <CurrencyInput label="Contingency %" hint="Rehab buffer for overruns. 10–15% is standard." value={f.contingencyPct} onChange={v => set('contingencyPct', v)} prefix="" suffix="%" />
         </div>
 
         <div className={s.sectionLabel}>Hold & Exit</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="Hold Period (Months)" value={f.holdPeriod} onChange={v => set('holdPeriod', v)} prefix="" />
-          <CurrencyInput label="Monthly Hold Costs" value={f.monthlyHoldCosts} onChange={v => set('monthlyHoldCosts', v)} />
-          <CurrencyInput label="ARV (After Repair Value)" value={f.arv} onChange={v => set('arv', v)} />
-          <CurrencyInput label="Selling Costs (%)" value={f.sellingCostsPct} onChange={v => set('sellingCostsPct', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Hold Period (Months)" hint="From close to sale — includes reno + list time." value={f.holdPeriod} onChange={v => set('holdPeriod', v)} prefix="" />
+          <CurrencyInput label="Monthly Hold Costs" hint="Taxes, insurance, utilities, HOA while renovating." value={f.monthlyHoldCosts} onChange={v => set('monthlyHoldCosts', v)} />
+          <CurrencyInput label="ARV (After Repair Value)" hint="Projected sale price post-renovation." value={f.arv} onChange={v => set('arv', v)} />
+          <CurrencyInput label="Selling Costs (%)" hint="Commission + transfer tax + closing. Usually 6–8%." value={f.sellingCostsPct} onChange={v => set('sellingCostsPct', v)} prefix="" suffix="%" />
         </div>
 
         <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -129,9 +129,9 @@ export default function FlipModel() {
         </div>
         {useDebt && (
           <div className={s.inputGrid}>
-            <CurrencyInput label="LTC %" value={f.ltcPct} onChange={v => set('ltcPct', v)} prefix="" suffix="%" />
-            <CurrencyInput label="Interest Rate (IO)" value={f.intRate} onChange={v => set('intRate', v)} prefix="" suffix="%" />
-            <CurrencyInput label="Points" value={f.points} onChange={v => set('points', v)} prefix="" suffix="%" />
+            <CurrencyInput label="LTC %" hint="Loan-to-Cost — % of total project financed." value={f.ltcPct} onChange={v => set('ltcPct', v)} prefix="" suffix="%" />
+            <CurrencyInput label="Interest Rate (IO)" hint="Annual interest rate. Interest-only, no amort." value={f.intRate} onChange={v => set('intRate', v)} prefix="" suffix="%" />
+            <CurrencyInput label="Points" hint="Upfront lender fee as % of loan. 1–3 typical." value={f.points} onChange={v => set('points', v)} prefix="" suffix="%" />
           </div>
         )}
 

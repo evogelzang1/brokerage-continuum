@@ -128,24 +128,24 @@ export default function ReturnOnCost() {
       <div className={styles.inputPane}>
         <div className={s.sectionLabel}>Purchase & Rehab</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="Acquisition Price" value={f.acquisitionPrice} onChange={v => set('acquisitionPrice', v)} />
-          <CurrencyInput label="Closing Costs %" value={f.closingCostsPct} onChange={v => set('closingCostsPct', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Rehab / CapEx" value={f.rehabCapex} onChange={v => set('rehabCapex', v)} />
-          <CurrencyInput label="Total Project Cost" value={calc.projectCost} onChange={() => {}} disabled />
+          <CurrencyInput label="Acquisition Price" hint="Purchase price of the asset." value={f.acquisitionPrice} onChange={v => set('acquisitionPrice', v)} />
+          <CurrencyInput label="Closing Costs %" hint="Title, escrow, legal, lender fees. 1–3%." value={f.closingCostsPct} onChange={v => set('closingCostsPct', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Rehab / CapEx" hint="Value-add capital — repositioning, unit renovations, tenant improvements." value={f.rehabCapex} onChange={v => set('rehabCapex', v)} />
+          <CurrencyInput label="Total Project Cost" hint="Auto-calculated sum." value={calc.projectCost} onChange={() => {}} disabled />
         </div>
 
         <div className={s.sectionLabel}>Construction Period</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="Construction Months" value={f.constructionMonths} onChange={v => set('constructionMonths', v)} prefix="" />
-          <CurrencyInput label="Rent Loss % During Reno" value={f.rentLossPct} onChange={v => set('rentLossPct', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Construction Months" hint="Time to complete value-add work and stabilize." value={f.constructionMonths} onChange={v => set('constructionMonths', v)} prefix="" />
+          <CurrencyInput label="Rent Loss % During Reno" hint="% of in-place NOI lost during reno. 100% = full vacancy." value={f.rentLossPct} onChange={v => set('rentLossPct', v)} prefix="" suffix="%" />
         </div>
 
         <div className={s.sectionLabel}>NOI & Cap Rates</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="In-Place NOI" value={f.inPlaceNOI} onChange={v => set('inPlaceNOI', v)} />
-          <CurrencyInput label="Stabilized NOI" value={f.stabilizedNOI} onChange={v => set('stabilizedNOI', v)} />
-          <CurrencyInput label="Market Cap Rate (%)" value={f.marketCapRate} onChange={v => set('marketCapRate', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Exit Cap Rate (%)" value={f.exitCapRate} onChange={v => set('exitCapRate', v)} prefix="" suffix="%" />
+          <CurrencyInput label="In-Place NOI" hint="Current year-1 NOI as-is, pre-renovation." value={f.inPlaceNOI} onChange={v => set('inPlaceNOI', v)} />
+          <CurrencyInput label="Stabilized NOI" hint="Post-renovation NOI at full lease-up." value={f.stabilizedNOI} onChange={v => set('stabilizedNOI', v)} />
+          <CurrencyInput label="Market Cap Rate (%)" hint="Today's market cap rate for the stabilized asset class." value={f.marketCapRate} onChange={v => set('marketCapRate', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Exit Cap Rate (%)" hint="Projected cap rate at future sale. Often higher than market to be conservative." value={f.exitCapRate} onChange={v => set('exitCapRate', v)} prefix="" suffix="%" />
         </div>
 
         <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -157,16 +157,16 @@ export default function ReturnOnCost() {
         </div>
         {useDebt && (
           <div className={s.inputGrid}>
-            <CurrencyInput label="LTC %" value={f.loanLTC} onChange={v => set('loanLTC', v)} prefix="" suffix="%" />
-            <CurrencyInput label="Const. Rate (IO)" value={f.constLoanRate} onChange={v => set('constLoanRate', v)} prefix="" suffix="%" />
+            <CurrencyInput label="LTC %" hint="% of total project cost financed by construction loan." value={f.loanLTC} onChange={v => set('loanLTC', v)} prefix="" suffix="%" />
+            <CurrencyInput label="Const. Rate (IO)" hint="Interest-only rate during construction draw period." value={f.constLoanRate} onChange={v => set('constLoanRate', v)} prefix="" suffix="%" />
           </div>
         )}
 
         <div className={s.sectionLabel}>Stabilization Refi</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="Refi LTV %" value={f.refiLTV} onChange={v => set('refiLTV', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Refi Rate" value={f.refiRate} onChange={v => set('refiRate', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Refi Amortization (yrs)" value={f.refiAmort} onChange={v => set('refiAmort', v)} prefix="" />
+          <CurrencyInput label="Refi LTV %" hint="% of stabilized value for the permanent loan. 65–75% typical." value={f.refiLTV} onChange={v => set('refiLTV', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Refi Rate" hint="Permanent loan interest rate post-stabilization." value={f.refiRate} onChange={v => set('refiRate', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Refi Amortization (yrs)" hint="Typically 25–30 years." value={f.refiAmort} onChange={v => set('refiAmort', v)} prefix="" />
         </div>
 
         <div className={s.outputCard}>

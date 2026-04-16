@@ -194,21 +194,21 @@ th:first-child{text-align:left}td{text-align:right;padding:3px 6px}td:first-chil
 
         <div className={s.sectionLabel}>Relinquished Property</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="Current NOI" value={sub.noi} onChange={v => set('noi', v)} />
-          <CurrencyInput label="Exit Cap Rate" value={sub.exitCap} onChange={v => set('exitCap', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Original Purchase Price" value={sub.goingInPrice} onChange={v => set('goingInPrice', v)} />
-          <CurrencyInput label="Years Held" value={sub.yearsHeld} onChange={v => set('yearsHeld', v)} prefix="" />
-          <CurrencyInput label="Depreciable % (building)" value={sub.depreciationPct} onChange={v => set('depreciationPct', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Title / Escrow" value={sub.titleEscrow} onChange={v => set('titleEscrow', v)} />
-          <CurrencyInput label="Commission %" value={sub.commissionPct} onChange={v => set('commissionPct', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Current NOI" hint="Current year net operating income of the property being sold." value={sub.noi} onChange={v => set('noi', v)} />
+          <CurrencyInput label="Exit Cap Rate" hint="Cap rate used to value the sale. Sale price = NOI ÷ cap rate." value={sub.exitCap} onChange={v => set('exitCap', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Original Purchase Price" hint="What the seller paid when they acquired the property." value={sub.goingInPrice} onChange={v => set('goingInPrice', v)} />
+          <CurrencyInput label="Years Held" hint="How long the seller has owned it. Drives depreciation schedule." value={sub.yearsHeld} onChange={v => set('yearsHeld', v)} prefix="" />
+          <CurrencyInput label="Depreciable % (building)" hint="% of purchase price that's building vs. land. Land doesn't depreciate. 75–85% typical." value={sub.depreciationPct} onChange={v => set('depreciationPct', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Title / Escrow" hint="Closing costs on sale (title, escrow, transfer tax)." value={sub.titleEscrow} onChange={v => set('titleEscrow', v)} />
+          <CurrencyInput label="Commission %" hint="Total brokerage commission on the sale." value={sub.commissionPct} onChange={v => set('commissionPct', v)} prefix="" suffix="%" />
         </div>
 
         <div className={s.sectionLabel}>Existing Debt</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="Original Loan Balance" value={sub.origLoanBal} onChange={v => set('origLoanBal', v)} />
-          <CurrencyInput label="Current Loan Balance" value={sub.currLoanBal} onChange={v => set('currLoanBal', v)} />
-          <CurrencyInput label="Interest Rate" value={sub.intRate} onChange={v => set('intRate', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Amortization (yrs)" value={sub.amort} onChange={v => set('amort', v)} prefix="" />
+          <CurrencyInput label="Original Loan Balance" hint="Initial loan amount when the seller acquired the asset." value={sub.origLoanBal} onChange={v => set('origLoanBal', v)} />
+          <CurrencyInput label="Current Loan Balance" hint="Outstanding loan balance today — deducted from sale proceeds." value={sub.currLoanBal} onChange={v => set('currLoanBal', v)} />
+          <CurrencyInput label="Interest Rate" hint="Rate on the existing loan." value={sub.intRate} onChange={v => set('intRate', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Amortization (yrs)" hint="Original amortization schedule of the existing loan." value={sub.amort} onChange={v => set('amort', v)} prefix="" />
         </div>
 
         <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -223,20 +223,22 @@ th:first-child{text-align:left}td{text-align:right;padding:3px 6px}td:first-chil
             <div key={i} className={styles.replCard}>
               <input className={styles.replName} value={repls[i].name} onChange={e => setR(i, 'name', e.target.value)} placeholder={`Option ${i + 1}`} />
               <div className={styles.replInputs}>
-                <CurrencyInput label="NOI" value={repls[i].noi} onChange={v => setR(i, 'noi', v)} />
-                <CurrencyInput label="Cap Rate" value={repls[i].capRate} onChange={v => setR(i, 'capRate', v)} prefix="" suffix="%" />
+                <CurrencyInput label="NOI" hint="Year-1 NOI of replacement property." value={repls[i].noi} onChange={v => setR(i, 'noi', v)} />
+                <CurrencyInput label="Cap Rate" hint="Replacement cap rate determines purchase price." value={repls[i].capRate} onChange={v => setR(i, 'capRate', v)} prefix="" suffix="%" />
                 {replDebt && <>
-                  <CurrencyInput label="Interest Rate" value={repls[i].rate} onChange={v => setR(i, 'rate', v)} prefix="" suffix="%" />
-                  <CurrencyInput label="Amortization" value={repls[i].amort} onChange={v => setR(i, 'amort', v)} prefix="" />
+                  <CurrencyInput label="Interest Rate" hint="New loan rate on replacement property." value={repls[i].rate} onChange={v => setR(i, 'rate', v)} prefix="" suffix="%" />
+                  <CurrencyInput label="Amortization" hint="Amort period for new loan. 25–30 yrs typical." value={repls[i].amort} onChange={v => setR(i, 'amort', v)} prefix="" />
                 </>}
                 <div className={s.fieldGroup}>
                   <label className={s.label}>Lease Type</label>
                   <input className={s.input} value={repls[i].leaseType} onChange={e => setR(i, 'leaseType', e.target.value)} />
+                  <div className={s.hint}>NNN, Absolute Net, Modified Gross, etc.</div>
                 </div>
-                <CurrencyInput label="Lease Years" value={repls[i].leaseYears} onChange={v => setR(i, 'leaseYears', v)} prefix="" />
+                <CurrencyInput label="Lease Years" hint="Remaining primary lease term." value={repls[i].leaseYears} onChange={v => setR(i, 'leaseYears', v)} prefix="" />
                 <div className={s.fieldGroup}>
                   <label className={s.label}>Rent Increases</label>
                   <input className={s.input} value={repls[i].rentIncreases} onChange={e => setR(i, 'rentIncreases', e.target.value)} />
+                  <div className={s.hint}>Escalation schedule (e.g. 2% annually).</div>
                 </div>
               </div>
               <div className={styles.replResults}>

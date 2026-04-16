@@ -78,6 +78,13 @@
   color: var(--text-muted);
 }
 
+.hint {
+  font-size: 11px;
+  color: var(--text-subtle);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
 .input {
   font-family: inherit;
   font-size: 13px;

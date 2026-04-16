@@ -3,7 +3,7 @@ import s from './shared.module.css'
 
 const fmt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
 
-export default function CurrencyInput({ label, value, onChange, prefix = '$', suffix, disabled }) {
+export default function CurrencyInput({ label, hint, value, onChange, prefix = '$', suffix, disabled }) {
   const [focused, setFocused] = useState(false)
   const [rawText, setRawText] = useState('')
 
@@ -32,6 +32,7 @@ export default function CurrencyInput({ label, value, onChange, prefix = '$', su
         onBlur={() => setFocused(false)}
         disabled={disabled}
       />
+      {hint && <div className={s.hint}>{hint}</div>}
     </div>
   )
 }
