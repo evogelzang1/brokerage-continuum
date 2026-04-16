@@ -1,0 +1,80 @@
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 3px 0;
+}
+
+.toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* Timeline graphic — client-facing light theme */
+.timelineWrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.timeline {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 40px 36px;
+  color: #1a1a1a;
+  font-family: 'Inter', -apple-system, sans-serif;
+  min-height: 100%;
+}
+
+.tlHeader {
+  text-align: center;
+  margin: -40px -36px 40px;
+  padding: 32px 36px;
+  background: #003057;
+  border-radius: 10px 10px 0 0;
+}
+
+.tlTitle { font-size: 22px; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+.tlAddress { font-size: 17px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+.tlMeta { display: flex; justify-content: center; gap: 20px; font-size: 13px; color: rgba(255,255,255,0.75); font-weight: 500; }
+
+.tlTrack { position: relative; display: flex; flex-direction: column; padding-left: 130px; }
+.tlNode { position: relative; padding-left: 32px; padding-bottom: 32px; }
+.tlNode:last-child { padding-bottom: 0; }
+
+.tlDot { position: absolute; left: -7px; top: 2px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px currentColor; z-index: 2; }
+.tlLine { position: absolute; left: 0; top: 16px; bottom: 0; width: 1px; background: #d1d5db; }
+
+.tlCard { background: #f9fafb; border: 1px solid #e5e7eb; border-left: 3px solid #e5e7eb; border-radius: 8px; padding: 16px 20px; }
+.tlPhase { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+.tlDate { font-size: 12px; color: #6b7280; font-weight: 500; margin-bottom: 10px; }
+
+.tlItems { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.tlItems li { font-size: 13px; color: #374151; line-height: 1.5; padding-left: 14px; position: relative; }
+.tlItems li::before { content: ''; position: absolute; left: 0; top: 7px; width: 5px; height: 5px; border-radius: 50%; background: #9ca3af; }
+
+.currentStage { position: absolute; left: -116px; top: 0; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.currentStageArrow { font-size: 11px; }
+.currentStageText { font-size: 9px; font-weight: 800; letter-spacing: 0.8px; color: #fff; padding: 3px 7px; border-radius: 4px; }
+
+.tlDotCurrent { width: 18px !important; height: 18px !important; left: -9px !important; box-shadow: 0 0 0 4px rgba(0,0,0,0.06); }
+.tlCardCurrent { border-width: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.tlNodePast .tlCard { opacity: 0.65; }
+.tlComplete { font-size: 11px; font-weight: 600; color: #059669; margin-top: 6px; }
+
+.tlFooter {
+  text-align: center;
+  margin: 36px -36px -40px;
+  padding: 20px 36px;
+  background: #003057;
+  border-radius: 0 0 10px 10px;
+  font-size: 11px;
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}

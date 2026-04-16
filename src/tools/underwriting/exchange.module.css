@@ -1,0 +1,122 @@
+.outputGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+}
+
+.deadlines {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.deadlines > div {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  text-align: center;
+}
+
+.deadlines span:first-child {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.deadlines span:last-child {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--yellow);
+}
+
+.toggleRow {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toggleBtn {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggleActive {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.replGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.replCard {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.replName {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 0 0 6px;
+  outline: none;
+  font-family: inherit;
+}
+
+.replName:focus {
+  border-color: var(--accent);
+}
+
+.replInputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.replResults {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.replRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.replRow span:first-child {
+  color: var(--text-muted);
+}
+
+.replRow span:last-child {
+  font-weight: 600;
+  color: var(--text);
+}

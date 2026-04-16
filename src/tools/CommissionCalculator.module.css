@@ -1,0 +1,130 @@
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.inputSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.checkLabel input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+}
+
+.resultSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.resultCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resultRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+}
+
+.resultLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.resultValue {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deduction {
+  color: var(--red);
+}
+
+.netRow {
+  border-top: 2px solid var(--accent);
+  padding-top: 12px;
+  margin-top: 8px;
+}
+
+.netLabel {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.netValue {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--green);
+}
+
+.effectiveRate {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 4px;
+}
+
+/* Visual bar */
+.breakdownBar {
+  display: flex;
+  height: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.barSegment {
+  min-width: 4px;
+  border-radius: 3px;
+  transition: flex 0.3s;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}

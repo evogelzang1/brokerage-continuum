@@ -1,0 +1,141 @@
+.topFields {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.offerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.offerCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.offerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.offerName {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  flex: 1;
+}
+
+.offerName:focus {
+  border-bottom: 1px solid var(--accent);
+}
+
+.removeBtn {
+  font-size: 18px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.removeBtn:hover {
+  color: var(--red);
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.checkLabel input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+}
+
+/* Comparison table */
+.compareSection {
+  margin-top: 8px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  font-weight: 700;
+  text-align: center;
+  padding: 12px 16px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-hover);
+}
+
+.table th:first-child {
+  text-align: left;
+  width: 160px;
+}
+
+.table td {
+  text-align: center;
+  padding: 8px 16px;
+  color: var(--text);
+}
+
+.table td:first-child {
+  text-align: left;
+}
+
+.rowLabel {
+  color: var(--text-muted) !important;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.altRow {
+  background: var(--bg);
+}
+
+.notesRow td {
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+  padding-top: 10px;
+}
+
+.noteCell {
+  max-width: 200px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
