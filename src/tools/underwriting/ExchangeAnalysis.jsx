@@ -136,13 +136,13 @@ export default function ExchangeAnalysis() {
          ['Cash-on-Cash', o => fmtPct(o.cashOnCash)], ['CF vs Subject', o => `${o.cfDelta >= 0 ? '+' : ''}${fmt$(o.cfDelta)}/yr`],
          ['Lease Type', o => o.leaseType], ['Lease Years', o => String(o.leaseYears)]]
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>1031 Exchange Analysis</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title> </title>
 <style>
-@page{size:letter;margin:.3in}
+@page{size:letter;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0;padding:0}
-body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:9px;-webkit-print-color-adjust:exact}
-.wrap{max-width:7.9in;margin:0 auto}
+body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:9px;-webkit-print-color-adjust:exact;padding:.3in}
+.wrap{max-width:100%;margin:0 auto}
 .banner{background:#101828;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:4px}
 .banner h1{font-size:12px;margin:0;font-weight:700}
 .banner span{font-size:7.5px;opacity:.7}

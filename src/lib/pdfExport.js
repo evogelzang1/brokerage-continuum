@@ -13,6 +13,7 @@ export function openHtml(html) {
   if (w) {
     w.document.write(html)
     w.document.close()
+    w.document.title = ' '
     w.focus()
     setTimeout(() => w.print(), 300)
   } else {
@@ -24,13 +25,13 @@ export function exportToolPdf({ title, subtitle, inputs, outputs, footnotes }) {
   const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   const note = footnotes || 'For analysis purposes only. Consult a qualified tax/legal professional before making investment decisions.'
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title> </title>
 <style>
-@page{size:letter;margin:.35in}
+@page{size:letter;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0;padding:0}
-body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.35;font-size:9.5px;padding:0}
-.wrap{max-width:7.8in;margin:0 auto;padding:0}
+body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.35;font-size:9.5px;padding:.35in}
+.wrap{max-width:100%;margin:0 auto;padding:0}
 .banner{background:#101828;color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:4px}
 .banner h1{font-size:13px;margin:0;font-weight:700;letter-spacing:.02em}
 .banner span{font-size:8px;opacity:.75}
