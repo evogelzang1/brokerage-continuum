@@ -6,13 +6,36 @@
 }
 
 .header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   padding: 24px 36px 0;
   flex-shrink: 0;
+  gap: 16px;
 }
 
 .brand {
   display: flex;
   flex-direction: column;
+}
+
+.themeBtn {
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.themeBtn:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
 }
 
 .title {

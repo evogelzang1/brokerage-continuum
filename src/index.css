@@ -4,7 +4,31 @@
   padding: 0;
 }
 
-:root, [data-theme="dark"] {
+/* Light theme (default) */
+:root, [data-theme="light"] {
+  --bg: #ffffff;
+  --bg-card: #f6f8fa;
+  --bg-hover: #eef1f4;
+  --border: #d0d7de;
+  --border-hover: #afb8c1;
+  --text: #1f2328;
+  --text-muted: #59636e;
+  --text-subtle: #8c959f;
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --green: #1a7f37;
+  --green-bg: #dafbe1;
+  --red: #cf222e;
+  --red-bg: #ffebe9;
+  --yellow: #9a6700;
+  --yellow-bg: #fff8c5;
+  --orange: #bc4c00;
+  --orange-bg: #fff1e5;
+  --purple: #8250df;
+  --purple-bg: #f5edff;
+}
+
+[data-theme="dark"] {
   --bg: #0d1117;
   --bg-card: #161b22;
   --bg-hover: #1c2230;

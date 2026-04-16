@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import MarketingTimeline from './tools/MarketingTimeline'
 import EmailGenerators from './tools/EmailGenerators'
 import Underwriting from './tools/Underwriting'
@@ -18,9 +18,17 @@ const SECTIONS = [
   { id: 'commission', label: 'Commission Calculator', component: CommissionCalculator },
 ]
 
+const THEME_KEY = 'bc-theme'
+
 export default function App() {
   const [active, setActive] = useState('underwriting')
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light')
   const ActiveComponent = SECTIONS.find(s => s.id === active)?.component
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem(THEME_KEY, theme)
+  }, [theme])
 
   return (
     <div className={styles.app}>
@@ -29,6 +37,13 @@ export default function App() {
           <h1 className={styles.title}>Brokerage Continuum</h1>
           <p className={styles.sub}>Full lifecycle tools for CRE listings</p>
         </div>
+        <button
+          className={styles.themeBtn}
+          onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+        >
+          {theme === 'light' ? '☾ Dark' : '☀ Light'}
+        </button>
       </header>
       <nav className={styles.nav}>
         {SECTIONS.map((s, i) => (
