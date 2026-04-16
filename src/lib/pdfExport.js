@@ -27,7 +27,7 @@ export function exportToolPdf({ title, subtitle, inputs, outputs, footnotes }) {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
 <style>
 @page{size:letter;margin:.35in}
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0;padding:0}
 body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.35;font-size:9.5px;padding:0}
 .wrap{max-width:7.8in;margin:0 auto;padding:0}

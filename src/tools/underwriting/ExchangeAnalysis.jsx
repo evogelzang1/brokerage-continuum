@@ -139,9 +139,9 @@ export default function ExchangeAnalysis() {
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>1031 Exchange Analysis</title>
 <style>
 @page{size:letter;margin:.3in}
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0;padding:0}
-body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:9px}
+body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:9px;-webkit-print-color-adjust:exact}
 .wrap{max-width:7.9in;margin:0 auto}
 .banner{background:#101828;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:4px}
 .banner h1{font-size:12px;margin:0;font-weight:700}
@@ -287,62 +287,148 @@ ${taxRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><spa
         </div>
       </div>
 
-      {/* Preview Pane */}
-      <div className={styles.preview}>
-        <div className={styles.previewHeader}>
-          <span className={styles.previewTitle}>PDF Preview</span>
-          <button className={s.btnPrimary} onClick={handleExport}>Export PDF</button>
-        </div>
-        <div className={styles.previewBody}>
-          <div className={styles.pvBanner}>
-            <span className={styles.pvBannerTitle}>1031 EXCHANGE ANALYSIS</span>
-            <span className={styles.pvBannerSub}>Matthews Real Estate Investment Services</span>
-          </div>
-          <div className={styles.pvMeta}>{`Prepared for: ${clientName} — ${previewDate}`}</div>
+      {/* Preview Pane — matches print output exactly */}
+      <Preview1031
+        clientName={clientName}
+        previewDate={previewDate}
+        sub={sub}
+        calc={calc}
+        repls={repls}
+        replDebt={replDebt}
+        replMetricsPreview={replMetricsPreview}
+        fmt$={fmt$}
+        fmtPct={fmtPct}
+        fmtDate={fmtDate}
+        onExport={handleExport}
+      />
+    </div>
+  )
+}
 
-          <div className={styles.pvSection}>RELINQUISHED PROPERTY</div>
-          <div className={styles.pvRows}>
-            <div className={styles.pvRow}><span>Current NOI</span><span>{fmt$(sub.noi)}</span></div>
-            <div className={styles.pvRow}><span>Exit Cap Rate</span><span>{fmtPct(sub.exitCap / 100)}</span></div>
-            <div className={styles.pvRow}><span>Sale Price</span><span>{fmt$(calc.salePrice)}</span></div>
-            <div className={styles.pvRow}><span>Original Purchase Price</span><span>{fmt$(sub.goingInPrice)}</span></div>
-            <div className={styles.pvRow}><span>Value Appreciation</span><span>{fmt$(calc.appreciation)}</span></div>
-            <div className={styles.pvRow}><span>Current Loan Balance</span><span>{fmt$(sub.currLoanBal)}</span></div>
-            <div className={styles.pvRow}><span>Annual Debt Service</span><span>{fmt$(calc.sAnnDebt)}</span></div>
-            <div className={styles.pvRow}><span>Cash Flow After Debt</span><span>{fmt$(calc.sCF)}</span></div>
-            <div className={styles.pvRow}><span>Return on Equity</span><span>{fmtPct(calc.sROE)}</span></div>
-            <div className={styles.pvRow}><span>Commission ({sub.commissionPct}%)</span><span>{fmt$(calc.brokerComm)}</span></div>
-            <div className={`${styles.pvRow} ${styles.pvRowHL}`}><span>Total Equity for 1031</span><span>{fmt$(calc.equity1031)}</span></div>
+// Print-matching preview for 1031 Exchange — inline styles mirror the exported HTML
+function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, replMetricsPreview, fmt$, fmtPct, fmtDate, onExport }) {
+  const p = {
+    outer: { width: 460, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', position: 'sticky', top: 0, background: '#fff' },
+    header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg-hover)' },
+    headerTitle: { fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' },
+    body: { maxHeight: 700, overflowY: 'auto' },
+    wrap: { padding: '10px 14px', fontFamily: "'Inter', -apple-system, sans-serif", color: '#1a1a1a', fontSize: 9, lineHeight: 1.3, background: '#fff' },
+    banner: { background: '#101828', color: '#fff', padding: '6px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: 3, marginBottom: 4 },
+    bannerTitle: { fontSize: 12, margin: 0, fontWeight: 700 },
+    bannerSub: { fontSize: 7.5, opacity: 0.7 },
+    meta: { fontSize: 8.5, color: '#6e7378', marginBottom: 6 },
+    grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+    section: { fontSize: 8, fontWeight: 700, color: '#0969da', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #d0d7de', padding: '3px 0 1px', margin: '4px 0 2px' },
+    row: { display: 'flex', justifyContent: 'space-between', padding: '1px 3px', fontSize: 8.5, lineHeight: 1.25 },
+    rowAlt: { background: '#f5f7fa' },
+    rowLabel: { color: '#6e7378' },
+    rowValue: { fontWeight: 600 },
+    hl: { borderTop: '1px solid #d0d7de', marginTop: 2, paddingTop: 2 },
+    hlValue: { color: '#22783c', fontWeight: 700 },
+    deadlines: { display: 'flex', gap: 6, margin: '6px 0' },
+    deadlineBox: { flex: 1, background: '#fffbe6', border: '1px solid #f0cc4a', borderRadius: 3, padding: '3px 5px', textAlign: 'center' },
+    deadlineLabel: { color: '#6e7378', fontWeight: 600, display: 'block', fontSize: 7.5 },
+    deadlineValue: { color: '#9a6700', fontWeight: 700, fontSize: 9 },
+    table: { width: '100%', borderCollapse: 'collapse', fontSize: 8, marginTop: 3 },
+    th: { textAlign: 'right', padding: '2px 4px', fontWeight: 700, borderBottom: '1px solid #d0d7de', background: '#f5f7fa', color: '#1a1a1a' },
+    thFirst: { textAlign: 'left' },
+    td: { textAlign: 'right', padding: '2px 4px', fontSize: 8, color: '#1a1a1a' },
+    tdFirst: { textAlign: 'left', color: '#6e7378', fontWeight: 500 },
+    trAlt: { background: '#fafbfc' },
+    footer: { marginTop: 6, fontSize: 7, color: '#999', borderTop: '1px solid #d0d7de', paddingTop: 3, textAlign: 'center' },
+  }
+
+  const subRows = [
+    ['Current NOI', fmt$(sub.noi)],
+    ['Exit Cap Rate', fmtPct(sub.exitCap / 100)],
+    ['Sale Price', fmt$(calc.salePrice)],
+    ['Original Purchase Price', fmt$(sub.goingInPrice)],
+    ['Value Appreciation', fmt$(calc.appreciation)],
+    ['Current Loan Balance', fmt$(sub.currLoanBal)],
+    ['Annual Debt Service', fmt$(calc.sAnnDebt)],
+    ['Cash Flow After Debt', fmt$(calc.sCF)],
+    ['Return on Equity', fmtPct(calc.sROE)],
+    [`Commission (${sub.commissionPct}%)`, fmt$(calc.brokerComm)],
+  ]
+  const taxRows = [
+    ['Adjusted Tax Basis', fmt$(calc.taxBasis)],
+    [`Accum. Depreciation (${sub.yearsHeld} yrs)`, fmt$(calc.accumDepr)],
+    ['Capital Gains Tax (23.8%)', fmt$(calc.capGainsTax)],
+    ['Depreciation Recapture (25%)', fmt$(calc.depRecapTax)],
+  ]
+
+  return (
+    <div style={p.outer}>
+      <div style={p.header}>
+        <span style={p.headerTitle}>PDF Preview</span>
+        <button onClick={onExport} style={{ fontSize: 12, fontWeight: 600, fontFamily: 'inherit', color: '#fff', background: 'var(--accent)', border: 'none', padding: '7px 16px', borderRadius: 6, cursor: 'pointer' }}>Export PDF</button>
+      </div>
+      <div style={p.body}>
+        <div style={p.wrap}>
+          <div style={p.banner}>
+            <h1 style={p.bannerTitle}>1031 EXCHANGE ANALYSIS</h1>
+            <span style={p.bannerSub}>Matthews Real Estate Investment Services</span>
+          </div>
+          <div style={p.meta}>Prepared for: {clientName} — {previewDate}</div>
+
+          <div style={p.grid}>
+            <div>
+              <div style={p.section}>Relinquished Property</div>
+              {subRows.map(([l, v], i) => (
+                <div key={l} style={{ ...p.row, ...(i % 2 ? p.rowAlt : {}) }}>
+                  <span style={p.rowLabel}>{l}</span>
+                  <span style={p.rowValue}>{v}</span>
+                </div>
+              ))}
+              <div style={{ ...p.row, ...p.hl }}>
+                <span style={p.rowLabel}>Total Equity for 1031</span>
+                <span style={p.hlValue}>{fmt$(calc.equity1031)}</span>
+              </div>
+            </div>
+            <div>
+              <div style={p.section}>Tax Deferral</div>
+              {taxRows.map(([l, v], i) => (
+                <div key={l} style={{ ...p.row, ...(i % 2 ? p.rowAlt : {}) }}>
+                  <span style={p.rowLabel}>{l}</span>
+                  <span style={p.rowValue}>{v}</span>
+                </div>
+              ))}
+              <div style={{ ...p.row, ...p.hl }}>
+                <span style={p.rowLabel}>Tax Saved via 1031</span>
+                <span style={p.hlValue}>{fmt$(calc.taxSaved)}</span>
+              </div>
+              <div style={p.deadlines}>
+                <div style={p.deadlineBox}>
+                  <span style={p.deadlineLabel}>45-Day ID</span>
+                  <span style={p.deadlineValue}>{fmtDate(calc.id45)}</span>
+                </div>
+                <div style={p.deadlineBox}>
+                  <span style={p.deadlineLabel}>180-Day Close</span>
+                  <span style={p.deadlineValue}>{fmtDate(calc.close180)}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className={styles.pvSection}>TAX DEFERRAL</div>
-          <div className={styles.pvRows}>
-            <div className={styles.pvRow}><span>Adjusted Tax Basis</span><span>{fmt$(calc.taxBasis)}</span></div>
-            <div className={styles.pvRow}><span>Accum. Depreciation ({sub.yearsHeld} yrs)</span><span>{fmt$(calc.accumDepr)}</span></div>
-            <div className={styles.pvRow}><span>Capital Gains Tax (23.8%)</span><span>{fmt$(calc.capGainsTax)}</span></div>
-            <div className={styles.pvRow}><span>Depreciation Recapture (25%)</span><span>{fmt$(calc.depRecapTax)}</span></div>
-            <div className={`${styles.pvRow} ${styles.pvRowHL}`}><span>Tax Saved via 1031</span><span>{fmt$(calc.taxSaved)}</span></div>
-          </div>
-
-          <div className={styles.pvDeadlines}>
-            <div><span>45-Day ID</span><span>{fmtDate(calc.id45)}</span></div>
-            <div><span>180-Day Close</span><span>{fmtDate(calc.close180)}</span></div>
-          </div>
-
-          <div className={styles.pvSection}>REPLACEMENT PROPERTIES {replDebt ? '(WITH DEBT)' : '(ALL CASH)'}</div>
-          <table className={styles.pvTable}>
-            <thead><tr><th></th>{repls.map((r, i) => <th key={i}>{r.name || `Option ${i + 1}`}</th>)}</tr></thead>
+          <div style={p.section}>Replacement Properties {replDebt ? '(With Debt)' : '(All Cash)'}</div>
+          <table style={p.table}>
+            <thead>
+              <tr>
+                <th style={{ ...p.th, ...p.thFirst }}></th>
+                {repls.map((r, i) => <th key={i} style={p.th}>{r.name || `Option ${i + 1}`}</th>)}
+              </tr>
+            </thead>
             <tbody>
               {replMetricsPreview.map(([label, fn], ri) => (
-                <tr key={label} className={ri % 2 === 0 ? styles.pvRowAlt : ''}>
-                  <td className={styles.pvMetricLabel}>{label}</td>
-                  {calc.options.map((o, i) => <td key={i}>{fn(o)}</td>)}
+                <tr key={label} style={ri % 2 === 0 ? p.trAlt : {}}>
+                  <td style={{ ...p.td, ...p.tdFirst }}>{label}</td>
+                  {calc.options.map((o, i) => <td key={i} style={p.td}>{fn(o)}</td>)}
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div className={styles.pvFooter}>For analysis purposes only. Consult a qualified tax/legal professional.</div>
+          <div style={p.footer}>For analysis purposes only. Consult a qualified tax/legal professional. — Matthews REIS</div>
         </div>
       </div>
     </div>
