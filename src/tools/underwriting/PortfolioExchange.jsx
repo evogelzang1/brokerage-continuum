@@ -76,9 +76,7 @@ const DEFAULT_SUB = {
   amort: 25,
   titleEscrow: 75_000,
   commissionPct: 2,
-  goingInPrice: 18_000_000,
-  yearsHeld: 12,
-  depreciationPct: 80,
+  estimatedTaxLiability: 0,
 }
 
 const DEFAULT_SCENARIOS = [
@@ -113,16 +111,10 @@ export default function PortfolioExchange() {
     const sDSCR = sAnnDS > 0 ? sub.noi / sAnnDS : 0
     const currentCap = sub.salePrice > 0 ? sub.noi / sub.salePrice : 0
 
-    // Tax deferral
-    const depreciableBasis = sub.goingInPrice * (sub.depreciationPct / 100)
-    const annualDepr = depreciableBasis / 27.5
-    const accumDepr = Math.min(annualDepr * sub.yearsHeld, depreciableBasis)
-    const taxBasis = sub.goingInPrice - accumDepr
-    const capitalGain = Math.max(sub.salePrice - sub.goingInPrice, 0)
-    const depRecapture = accumDepr
-    const capGainsTax = capitalGain * 0.238
-    const depRecapTax = depRecapture * 0.25
-    const totalTaxBill = capGainsTax + depRecapTax
+    // Tax deferral — optional CPA estimate. Portfolio-level basis aggregation
+    // is too rough to derive credibly from first principles, so we defer to
+    // whatever number the seller's CPA produces.
+    const totalTaxBill = Math.max(0, sub.estimatedTaxLiability)
 
     // 1031 timing
     const today = new Date()
@@ -137,7 +129,7 @@ export default function PortfolioExchange() {
     return {
       equity1031, brokerComm, currLoanBal,
       sAnnDS, sCF, sEquity, sCoC, sDSCR, currentCap,
-      taxBasis, accumDepr, capitalGain, depRecapture, capGainsTax, depRecapTax, totalTaxBill,
+      totalTaxBill,
       id45, close180, results,
     }
   }, [sub, scenarios, refi])
@@ -155,13 +147,6 @@ export default function PortfolioExchange() {
       ['Cash-on-Cash', fmtPct(calc.sCoC)],
       [`Commission (${sub.commissionPct}%)`, fmt$(calc.brokerComm)],
       ['Title / Escrow', fmt$(sub.titleEscrow)],
-    ]
-
-    const taxRows = [
-      ['Adjusted Tax Basis', fmt$(calc.taxBasis)],
-      [`Accum. Depreciation (${sub.yearsHeld} yrs)`, fmt$(calc.accumDepr)],
-      ['Capital Gains Tax (23.8%)', fmt$(calc.capGainsTax)],
-      ['Depreciation Recapture (25%)', fmt$(calc.depRecapTax)],
     ]
 
     const rowFns = [
@@ -236,9 +221,10 @@ tr.alt{background:#fafbfc}
     <div class="row hl"><span>Net 1031 Equity</span><span>${fmt$(calc.equity1031)}</span></div>
   </div>
   <div>
-    <div class="section">Tax Deferral</div>
-    ${taxRows.map(([l, v], i) => `<div class="row ${i % 2 ? 'alt' : ''}"><span>${l}</span><span>${v}</span></div>`).join('')}
-    <div class="row hl"><span>Tax Saved via 1031</span><span>${fmt$(calc.totalTaxBill)}</span></div>
+    <div class="section">1031 Exchange Mechanics</div>
+    ${calc.totalTaxBill > 0
+      ? `<div class="row hl"><span>Tax Deferred via 1031 (CPA estimate)</span><span>${fmt$(calc.totalTaxBill)}</span></div>`
+      : `<div class="row"><span>Estimated Tax Deferred</span><span>Per seller's CPA</span></div>`}
     <div class="deadlines">
       <div><span>45-Day ID</span><span>${fmtDate(calc.id45)}</span></div>
       <div><span>180-Day Close</span><span>${fmtDate(calc.close180)}</span></div>
@@ -301,11 +287,10 @@ ${refiSection}
           </div>
         )}
 
-        <div className={s.sectionLabel}>Tax Basis (for deferral calc)</div>
+        <div className={s.sectionLabel}>1031 Tax Deferral (Optional)</div>
         <div className={s.inputGrid}>
-          <CurrencyInput label="Original Cost Basis" hint="Aggregate original purchase price of the portfolio." value={sub.goingInPrice} onChange={v => set('goingInPrice', v)} />
-          <CurrencyInput label="Years Held" hint="Average hold period — drives accumulated depreciation." value={sub.yearsHeld} onChange={v => set('yearsHeld', v)} prefix="" />
-          <CurrencyInput label="Depreciable % (building)" hint="% of basis attributable to building. 75–85% typical." value={sub.depreciationPct} onChange={v => set('depreciationPct', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Est. Tax Liability if Sold (per CPA)" hint="Optional. Paste the seller's CPA estimate of federal + state tax owed on an outright sale. Displayed as 'Tax Deferred via 1031.' Leave blank to omit — portfolio-level basis aggregation is too rough to derive credibly here." value={sub.estimatedTaxLiability} onChange={v => set('estimatedTaxLiability', v)} />
+          <div />
         </div>
 
         <div className={s.outputCard}>
@@ -315,7 +300,9 @@ ${refiSection}
           <div className={s.outputRow}><span className={s.outputLabel}>Annual Cash Flow</span><span className={s.outputValue}>{fmt$(calc.sCF)}</span></div>
           <div className={s.outputRow}><span className={s.outputLabel}>Cash-on-Cash</span><span className={s.outputValue}>{fmtPct(calc.sCoC)}</span></div>
           <div className={s.outputRow}><span className={s.outputLabel}>Net 1031 Equity Available</span><span className={`${s.outputValue} ${s.positive}`}>{fmt$(calc.equity1031)}</span></div>
-          <div className={s.outputRow}><span className={s.outputLabel}>Tax Deferred via 1031</span><span className={`${s.outputValue} ${s.positive}`}>{fmt$(calc.totalTaxBill)}</span></div>
+          {calc.totalTaxBill > 0 && (
+            <div className={s.outputRow}><span className={s.outputLabel}>Tax Deferred via 1031 (per CPA)</span><span className={`${s.outputValue} ${s.positive}`}>{fmt$(calc.totalTaxBill)}</span></div>
+          )}
         </div>
 
         <div className={s.sectionLabel}>Replacement Strategies</div>
@@ -442,12 +429,6 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     ['Cash-on-Cash', fmtPct(calc.sCoC)],
     [`Commission (${sub.commissionPct}%)`, fmt$(calc.brokerComm)],
   ]
-  const taxRows = [
-    ['Adjusted Tax Basis', fmt$(calc.taxBasis)],
-    [`Accum. Depreciation (${sub.yearsHeld} yrs)`, fmt$(calc.accumDepr)],
-    ['Capital Gains Tax (23.8%)', fmt$(calc.capGainsTax)],
-    ['Depreciation Recapture (25%)', fmt$(calc.depRecapTax)],
-  ]
   const rowFns = [
     ['Target Cap Rate', r => fmtPct(r.capRate)],
     ['Acquisition LTV', (r, sc) => sc.mode === 'cashRefi' ? 'All Cash' : fmtPct(r.ltv)],
@@ -489,17 +470,18 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
               </div>
             </div>
             <div>
-              <div style={p.section}>Tax Deferral</div>
-              {taxRows.map(([l, v], i) => (
-                <div key={l} style={{ ...p.row, ...(i % 2 ? p.rowAlt : {}) }}>
-                  <span style={p.rowLabel}>{l}</span>
-                  <span style={p.rowValue}>{v}</span>
+              <div style={p.section}>1031 Exchange Mechanics</div>
+              {calc.totalTaxBill > 0 ? (
+                <div style={{ ...p.row, ...p.hl }}>
+                  <span style={p.rowLabel}>Tax Deferred via 1031 (per CPA)</span>
+                  <span style={p.hlValue}>{fmt$(calc.totalTaxBill)}</span>
                 </div>
-              ))}
-              <div style={{ ...p.row, ...p.hl }}>
-                <span style={p.rowLabel}>Tax Saved via 1031</span>
-                <span style={p.hlValue}>{fmt$(calc.totalTaxBill)}</span>
-              </div>
+              ) : (
+                <div style={p.row}>
+                  <span style={p.rowLabel}>Estimated Tax Deferred</span>
+                  <span style={p.rowValue}>Per seller's CPA</span>
+                </div>
+              )}
               <div style={p.deadlines}>
                 <div style={p.deadlineBox}>
                   <span style={p.deadlineLabel}>45-Day ID</span>
