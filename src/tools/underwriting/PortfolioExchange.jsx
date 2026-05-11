@@ -27,27 +27,33 @@ function CUMPRINC(rate, nper, pv, start, end) {
   return -total
 }
 
-function buildScenario(equity1031, params, sCF, refi) {
+function buildScenario(equity1031, minReplacementValue, params, sCF, refi) {
   const { capRate, ltv, rate, amort } = params
   const cap = capRate / 100
   const lev = ltv / 100
 
-  // Acquisition with target LTV: equity covers down payment.
-  // Portfolio price = equity / (1 - LTV); loan = price * LTV; NOI = price * cap.
-  const price = lev < 1 ? equity1031 / (1 - lev) : 0
+  // 1031-safe sizing: replacement value must be ≥ relinquished sale price to
+  // fully defer tax. Equity-implied size = equity / (1 - LTV); we floor that
+  // at the sale-price minimum. Any shortfall has to be funded with cash from
+  // outside the exchange.
+  const equityImpliedPrice = lev < 1 ? equity1031 / (1 - lev) : equity1031
+  const price = Math.max(equityImpliedPrice, minReplacementValue)
   const loanAmt = price * lev
+  const downPayment = price - loanAmt
+  const additionalCashNeeded = Math.max(0, downPayment - equity1031)
+  const totalCashInvested = equity1031 + additionalCashNeeded
   const newNOI = price * cap
   const mRate = rate / 100 / 12
   const annDS = loanAmt > 0 ? -PMT(mRate, amort * 12, loanAmt) * 12 : 0
   const princRedux = loanAmt > 0 ? -CUMPRINC(mRate, amort * 12, loanAmt, 1, 12) : 0
   const netCF = newNOI - annDS
-  const cashReturn = equity1031 > 0 ? netCF / equity1031 : 0
-  const totalReturn = equity1031 > 0 ? (netCF + princRedux) / equity1031 : 0
+  const cashReturn = totalCashInvested > 0 ? netCF / totalCashInvested : 0
+  const totalReturn = totalCashInvested > 0 ? (netCF + princRedux) / totalCashInvested : 0
   const dscr = annDS > 0 ? newNOI / annDS : 0
   const debtYield = loanAmt > 0 ? newNOI / loanAmt : 0
   const cfDelta = netCF - sCF
 
-  // Optional cash-out refi (typically only meaningful when initial LTV is 0).
+  // Optional cash-out refi after an all-cash acquisition.
   let refiOut = null
   if (refi && refi.enabled) {
     const refiLev = refi.ltv / 100
@@ -57,14 +63,14 @@ function buildScenario(equity1031, params, sCF, refi) {
     const refiPrincRedux = refiLoan > 0 ? -CUMPRINC(refiRate, refi.amort * 12, refiLoan, 1, 12) : 0
     const cashExtracted = refiLoan
     const cfPostRefi = newNOI - refiAnnDS
-    const remainingEquity = Math.max(0, equity1031 - cashExtracted)
+    const remainingEquity = Math.max(0, price - refiLoan)
     const cocPostRefi = remainingEquity > 0 ? cfPostRefi / remainingEquity : 0
     const totalReturnPostRefi = remainingEquity > 0 ? (cfPostRefi + refiPrincRedux) / remainingEquity : 0
     const refiDSCR = refiAnnDS > 0 ? newNOI / refiAnnDS : 0
     refiOut = { refiLoan, refiAnnDS, refiPrincRedux, cashExtracted, cfPostRefi, remainingEquity, cocPostRefi, totalReturnPostRefi, refiDSCR }
   }
 
-  return { price, loanAmt, ltv: lev, newNOI, capRate: cap, annDS, princRedux, netCF, cashReturn, totalReturn, dscr, debtYield, cfDelta, refi: refiOut }
+  return { price, loanAmt, ltv: lev, newNOI, capRate: cap, annDS, princRedux, netCF, cashReturn, totalReturn, dscr, debtYield, cfDelta, additionalCashNeeded, totalCashInvested, refi: refiOut }
 }
 
 const DEFAULT_SUB = {
@@ -82,7 +88,8 @@ const DEFAULT_SUB = {
 const DEFAULT_SCENARIOS = [
   { name: 'Maximize Cash Flow', capRate: 6.75, ltv: 50, rate: 6.5, amort: 30, mode: 'leveraged' },
   { name: 'Preserve CF, Reduce Risk', capRate: 5.75, ltv: 30, rate: 6.5, amort: 30, mode: 'leveraged' },
-  { name: 'Free & Clear + Refi', capRate: 5.50, ltv: 0, rate: 0, amort: 30, mode: 'cashRefi' },
+  { name: 'Free & Clear (No Refi)', capRate: 5.50, ltv: 0, rate: 0, amort: 30, mode: 'cashOnly' },
+  { name: 'Free & Clear + Cash-Out Refi', capRate: 5.50, ltv: 0, rate: 0, amort: 30, mode: 'cashRefi' },
 ]
 
 const DEFAULT_REFI = { enabled: true, ltv: 50, rate: 6.5, amort: 30 }
@@ -122,8 +129,10 @@ export default function PortfolioExchange() {
     const close180 = new Date(today.getTime() + 180 * 86400000)
 
     const results = scenarios.map(sc => {
-      const useRefi = sc.mode === 'cashRefi'
-      return buildScenario(equity1031, useRefi ? { ...sc, ltv: 0 } : sc, sCF, useRefi ? refi : null)
+      const isCashAcq = sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
+      const params = isCashAcq ? { ...sc, ltv: 0 } : sc
+      const refiCfg = sc.mode === 'cashRefi' ? refi : null
+      return buildScenario(equity1031, sub.salePrice, params, sCF, refiCfg)
     })
 
     return {
@@ -149,12 +158,16 @@ export default function PortfolioExchange() {
       ['Title / Escrow', fmt$(sub.titleEscrow)],
     ]
 
+    const isCashMode = sc => sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
     const rowFns = [
-      ['Target Cap Rate', (r, sc) => fmtPct(r.capRate)],
-      ['Acquisition LTV', (r, sc) => sc.mode === 'cashRefi' ? 'All Cash' : fmtPct(r.ltv)],
-      ['Loan Rate', (r, sc) => sc.mode === 'cashRefi' ? '—' : `${sc.rate.toFixed(2)}%`],
+      ['Target Cap Rate', r => fmtPct(r.capRate)],
+      ['Acquisition LTV', (r, sc) => isCashMode(sc) ? 'All Cash' : fmtPct(r.ltv)],
+      ['Loan Rate', (r, sc) => isCashMode(sc) ? '—' : `${sc.rate.toFixed(2)}%`],
       ['Portfolio Size', r => fmt$(r.price)],
       ['Acquisition Debt', r => fmt$(r.loanAmt)],
+      ['1031 Equity Used', () => fmt$(calc.equity1031)],
+      ['Additional Cash Needed', r => r.additionalCashNeeded > 0 ? fmt$(r.additionalCashNeeded) : '—'],
+      ['Total Cash Invested', r => fmt$(r.totalCashInvested)],
       ['Year-1 NOI', r => fmt$(r.newNOI)],
       ['Annual Debt Service', r => fmt$(r.annDS)],
       ['Net Cash Flow', r => fmt$(r.netCF)],
@@ -165,19 +178,23 @@ export default function PortfolioExchange() {
       ['Total Return (incl. paydown)', r => fmtPct(r.totalReturn)],
     ]
 
-    const refiSection = refi.enabled ? `
-<div class="section">Scenario 3 — Cash-Out Refinance (Year 2+)</div>
+    const refiIdx = scenarios.findIndex(sc => sc.mode === 'cashRefi')
+    const refiData = refiIdx >= 0 ? calc.results[refiIdx]?.refi : null
+    const refiScenarioName = refiIdx >= 0 ? scenarios[refiIdx].name : ''
+
+    const refiSection = (refi.enabled && refiData) ? `
+<div class="section">${refiScenarioName} — Cash-Out Refinance (Year 2+)</div>
 <table>
-  <thead><tr><th></th><th>${scenarios[2].name}</th></tr></thead>
+  <thead><tr><th></th><th>Post-Refi Position</th></tr></thead>
   <tbody>
     <tr class="alt"><td>Refi LTV / Rate</td><td>${refi.ltv}% @ ${refi.rate.toFixed(2)}%</td></tr>
-    <tr><td>Refi Loan Amount</td><td>${fmt$(calc.results[2].refi?.refiLoan || 0)}</td></tr>
-    <tr class="alt"><td>Cash Extracted (tax-free)</td><td>${fmt$(calc.results[2].refi?.cashExtracted || 0)}</td></tr>
-    <tr><td>Refi Debt Service</td><td>${fmt$(calc.results[2].refi?.refiAnnDS || 0)}</td></tr>
-    <tr class="alt"><td>Net CF Post-Refi</td><td>${fmt$(calc.results[2].refi?.cfPostRefi || 0)}</td></tr>
-    <tr><td>Remaining Equity</td><td>${fmt$(calc.results[2].refi?.remainingEquity || 0)}</td></tr>
-    <tr class="alt"><td>CoC on Remaining Equity</td><td>${fmtPct(calc.results[2].refi?.cocPostRefi || 0)}</td></tr>
-    <tr><td>DSCR (Refi)</td><td>${(calc.results[2].refi?.refiDSCR || 0).toFixed(2)}x</td></tr>
+    <tr><td>Refi Loan Amount</td><td>${fmt$(refiData.refiLoan)}</td></tr>
+    <tr class="alt"><td>Cash Extracted (tax-free)</td><td>${fmt$(refiData.cashExtracted)}</td></tr>
+    <tr><td>Refi Debt Service</td><td>${fmt$(refiData.refiAnnDS)}</td></tr>
+    <tr class="alt"><td>Net CF Post-Refi</td><td>${fmt$(refiData.cfPostRefi)}</td></tr>
+    <tr><td>Remaining Equity (in Property)</td><td>${fmt$(refiData.remainingEquity)}</td></tr>
+    <tr class="alt"><td>CoC on Remaining Equity</td><td>${fmtPct(refiData.cocPostRefi)}</td></tr>
+    <tr><td>DSCR (Refi)</td><td>${refiData.refiDSCR.toFixed(2)}x</td></tr>
   </tbody>
 </table>` : ''
 
@@ -253,6 +270,9 @@ ${refiSection}
     openHtml(html)
   }
 
+  const refiIdx = scenarios.findIndex(sc => sc.mode === 'cashRefi')
+  const refiResult = refiIdx >= 0 ? calc.results[refiIdx]?.refi : null
+
   return (
     <div className={styles.splitLayout}>
       <div className={styles.inputPane}>
@@ -306,31 +326,38 @@ ${refiSection}
         </div>
 
         <div className={s.sectionLabel}>Replacement Strategies</div>
-        <div className={styles.replGrid}>
+        <div className={styles.replGrid} style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
           {scenarios.map((sc, i) => {
             const r = calc.results[i]
             const isRefi = sc.mode === 'cashRefi'
+            const isCashAcq = sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
             return (
               <div key={i} className={styles.replCard}>
                 <input className={styles.replName} value={sc.name} onChange={e => setSc(i, 'name', e.target.value)} placeholder={`Scenario ${i + 1}`} />
                 <div className={styles.replInputs}>
                   <CurrencyInput label="Target Cap Rate" hint="Weighted-average acquisition cap rate on the replacement portfolio." value={sc.capRate} onChange={v => setSc(i, 'capRate', v)} prefix="" suffix="%" />
-                  {!isRefi && <>
+                  {!isCashAcq && <>
                     <CurrencyInput label="Acquisition LTV" hint="Debt as % of new portfolio purchase price." value={sc.ltv} onChange={v => setSc(i, 'ltv', v)} prefix="" suffix="%" />
                     <CurrencyInput label="Loan Rate" hint="Blended rate on acquisition debt." value={sc.rate} onChange={v => setSc(i, 'rate', v)} prefix="" suffix="%" />
                     <CurrencyInput label="Amortization" hint="Amort period (yrs). 25–30 typical." value={sc.amort} onChange={v => setSc(i, 'amort', v)} prefix="" />
                   </>}
-                  {isRefi && (
+                  {isCashAcq && (
                     <div className={s.hint} style={{ marginTop: -2 }}>
-                      All-cash acquisition with the full 1031 equity, then a planned cash-out refinance in year 2+. Refi terms below.
+                      {isRefi
+                        ? 'All-cash acquisition sized to the relinquished sale price (1031-safe), then a planned cash-out refinance in year 2+. Refi terms below.'
+                        : 'All-cash acquisition sized to the relinquished sale price (1031-safe). No leverage, no refi — pure preservation strategy.'}
                     </div>
                   )}
                 </div>
                 <div className={styles.replResults}>
                   <div className={styles.replRow}><span>Portfolio Size</span><span>{fmt$M(r.price)}</span></div>
-                  <div className={styles.replRow}><span>Acquisition Debt</span><span>{isRefi ? '—' : fmt$M(r.loanAmt)}</span></div>
+                  <div className={styles.replRow}><span>Acquisition Debt</span><span>{isCashAcq ? '—' : fmt$M(r.loanAmt)}</span></div>
+                  {r.additionalCashNeeded > 0 && (
+                    <div className={`${styles.replRow} ${s.warning}`}><span>+ Cash Needed</span><span>{fmt$M(r.additionalCashNeeded)}</span></div>
+                  )}
+                  <div className={styles.replRow}><span>Total Cash Invested</span><span>{fmt$M(r.totalCashInvested)}</span></div>
                   <div className={styles.replRow}><span>Year-1 NOI</span><span>{fmt$(r.newNOI)}</span></div>
-                  <div className={styles.replRow}><span>Debt Service</span><span>{isRefi ? '—' : fmt$(r.annDS)}</span></div>
+                  <div className={styles.replRow}><span>Debt Service</span><span>{isCashAcq ? '—' : fmt$(r.annDS)}</span></div>
                   <div className={styles.replRow}><span>Net Cash Flow</span><span className={r.netCF < 0 ? s.negative : ''}>{fmt$(r.netCF)}</span></div>
                   <div className={`${styles.replRow} ${r.cfDelta >= 0 ? s.positive : s.negative}`}>
                     <span>CF vs Current</span><span>{r.cfDelta >= 0 ? '+' : ''}{fmt$(r.cfDelta)}</span>
@@ -345,7 +372,7 @@ ${refiSection}
         </div>
 
         <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          Cash-Out Refi (Scenario 3)
+          Cash-Out Refi Parameters
           <div className={styles.toggleRow}>
             <button className={`${styles.toggleBtn} ${!refi.enabled ? styles.toggleActive : ''}`} onClick={() => setRefiK('enabled', false)}>Skip Refi</button>
             <button className={`${styles.toggleBtn} ${refi.enabled ? styles.toggleActive : ''}`} onClick={() => setRefiK('enabled', true)}>Model Refi</button>
@@ -358,16 +385,16 @@ ${refiSection}
               <CurrencyInput label="Refi Rate" hint="Expected rate on the cash-out refi loan." value={refi.rate} onChange={v => setRefiK('rate', v)} prefix="" suffix="%" />
               <CurrencyInput label="Refi Amort (yrs)" hint="Amort period for the refi loan." value={refi.amort} onChange={v => setRefiK('amort', v)} prefix="" />
             </div>
-            {calc.results[2].refi && (
+            {refiResult && (
               <div className={s.outputCard}>
-                <div className={s.outputTitle}>Post-Refi Position</div>
-                <div className={s.outputRow}><span className={s.outputLabel}>Refi Loan Amount</span><span className={s.outputValue}>{fmt$(calc.results[2].refi.refiLoan)}</span></div>
-                <div className={s.outputRow}><span className={s.outputLabel}>Cash Extracted (tax-free)</span><span className={`${s.outputValue} ${s.positive}`}>{fmt$(calc.results[2].refi.cashExtracted)}</span></div>
-                <div className={s.outputRow}><span className={s.outputLabel}>Refi Debt Service</span><span className={s.outputValue}>{fmt$(calc.results[2].refi.refiAnnDS)}</span></div>
-                <div className={s.outputRow}><span className={s.outputLabel}>Net CF Post-Refi</span><span className={s.outputValue}>{fmt$(calc.results[2].refi.cfPostRefi)}</span></div>
-                <div className={s.outputRow}><span className={s.outputLabel}>Remaining Equity</span><span className={s.outputValue}>{fmt$(calc.results[2].refi.remainingEquity)}</span></div>
-                <div className={s.outputRow}><span className={s.outputLabel}>CoC on Remaining Equity</span><span className={`${s.outputValue} ${s.positive}`}>{fmtPct(calc.results[2].refi.cocPostRefi)}</span></div>
-                <div className={s.outputRow}><span className={s.outputLabel}>DSCR (Refi)</span><span className={s.outputValue}>{calc.results[2].refi.refiDSCR.toFixed(2)}x</span></div>
+                <div className={s.outputTitle}>Post-Refi Position ({scenarios[refiIdx].name})</div>
+                <div className={s.outputRow}><span className={s.outputLabel}>Refi Loan Amount</span><span className={s.outputValue}>{fmt$(refiResult.refiLoan)}</span></div>
+                <div className={s.outputRow}><span className={s.outputLabel}>Cash Extracted (tax-free)</span><span className={`${s.outputValue} ${s.positive}`}>{fmt$(refiResult.cashExtracted)}</span></div>
+                <div className={s.outputRow}><span className={s.outputLabel}>Refi Debt Service</span><span className={s.outputValue}>{fmt$(refiResult.refiAnnDS)}</span></div>
+                <div className={s.outputRow}><span className={s.outputLabel}>Net CF Post-Refi</span><span className={s.outputValue}>{fmt$(refiResult.cfPostRefi)}</span></div>
+                <div className={s.outputRow}><span className={s.outputLabel}>Remaining Equity (in Property)</span><span className={s.outputValue}>{fmt$(refiResult.remainingEquity)}</span></div>
+                <div className={s.outputRow}><span className={s.outputLabel}>CoC on Remaining Equity</span><span className={`${s.outputValue} ${s.positive}`}>{fmtPct(refiResult.cocPostRefi)}</span></div>
+                <div className={s.outputRow}><span className={s.outputLabel}>DSCR (Refi)</span><span className={s.outputValue}>{refiResult.refiDSCR.toFixed(2)}x</span></div>
               </div>
             )}
           </>
@@ -429,10 +456,12 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     ['Cash-on-Cash', fmtPct(calc.sCoC)],
     [`Commission (${sub.commissionPct}%)`, fmt$(calc.brokerComm)],
   ]
+  const isCash = sc => sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
   const rowFns = [
     ['Target Cap Rate', r => fmtPct(r.capRate)],
-    ['Acquisition LTV', (r, sc) => sc.mode === 'cashRefi' ? 'All Cash' : fmtPct(r.ltv)],
+    ['Acquisition LTV', (r, sc) => isCash(sc) ? 'All Cash' : fmtPct(r.ltv)],
     ['Portfolio Size', r => fmt$M(r.price)],
+    ['+ Cash Needed', r => r.additionalCashNeeded > 0 ? fmt$M(r.additionalCashNeeded) : '—'],
     ['Year-1 NOI', r => fmt$(r.newNOI)],
     ['Net Cash Flow', r => fmt$(r.netCF)],
     ['CF vs Current', r => `${r.cfDelta >= 0 ? '+' : ''}${fmt$(r.cfDelta)}`],
@@ -440,6 +469,8 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     ['Cash-on-Cash', r => fmtPct(r.cashReturn)],
     ['Total Return', r => fmtPct(r.totalReturn)],
   ]
+  const refiIdx = scenarios.findIndex(sc => sc.mode === 'cashRefi')
+  const refiData = refiIdx >= 0 ? calc.results[refiIdx]?.refi : null
 
   return (
     <div style={p.outer}>
@@ -513,14 +544,14 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             </tbody>
           </table>
 
-          {refi.enabled && calc.results[2].refi && (
+          {refi.enabled && refiData && (
             <>
-              <div style={p.section}>Scenario 3 — Cash-Out Refi (Yr 2+)</div>
+              <div style={p.section}>{scenarios[refiIdx].name} — Cash-Out Refi (Yr 2+)</div>
               <div style={{ ...p.row }}><span style={p.rowLabel}>Refi Terms</span><span style={p.rowValue}>{refi.ltv}% LTV @ {refi.rate.toFixed(2)}%</span></div>
-              <div style={{ ...p.row, ...p.rowAlt }}><span style={p.rowLabel}>Cash Extracted (tax-free)</span><span style={p.rowValue}>{fmt$(calc.results[2].refi.cashExtracted)}</span></div>
-              <div style={p.row}><span style={p.rowLabel}>Net CF Post-Refi</span><span style={p.rowValue}>{fmt$(calc.results[2].refi.cfPostRefi)}</span></div>
-              <div style={{ ...p.row, ...p.rowAlt }}><span style={p.rowLabel}>Remaining Equity</span><span style={p.rowValue}>{fmt$(calc.results[2].refi.remainingEquity)}</span></div>
-              <div style={p.row}><span style={p.rowLabel}>CoC on Remaining Equity</span><span style={p.rowValue}>{fmtPct(calc.results[2].refi.cocPostRefi)}</span></div>
+              <div style={{ ...p.row, ...p.rowAlt }}><span style={p.rowLabel}>Cash Extracted (tax-free)</span><span style={p.rowValue}>{fmt$(refiData.cashExtracted)}</span></div>
+              <div style={p.row}><span style={p.rowLabel}>Net CF Post-Refi</span><span style={p.rowValue}>{fmt$(refiData.cfPostRefi)}</span></div>
+              <div style={{ ...p.row, ...p.rowAlt }}><span style={p.rowLabel}>Remaining Equity</span><span style={p.rowValue}>{fmt$(refiData.remainingEquity)}</span></div>
+              <div style={p.row}><span style={p.rowLabel}>CoC on Remaining Equity</span><span style={p.rowValue}>{fmtPct(refiData.cocPostRefi)}</span></div>
             </>
           )}
 
