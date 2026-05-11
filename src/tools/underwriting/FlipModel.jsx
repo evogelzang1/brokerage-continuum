@@ -17,17 +17,37 @@ const TENANT_TIERS = [
   { id: 'vacant', label: 'Vacant / Speculative', cap: 9.50, hint: 'No signed tenant — priced to lease' },
 ]
 
+const REHAB_LINES = [
+  { key: 'demo', label: 'Demolition', hint: 'Tear-out, disposal, abatement.' },
+  { key: 'shell', label: 'Shell / Structural', hint: 'Roof, foundation, framing, walls.' },
+  { key: 'mep', label: 'MEP', hint: 'HVAC, electrical, plumbing.' },
+  { key: 'exterior', label: 'Exterior', hint: 'Facade, paint, signage, parking lot.' },
+  { key: 'interior', label: 'Interior Finishes', hint: 'Floors, ceilings, lighting, fixtures.' },
+  { key: 'tiSoft', label: 'TI + Soft Costs', hint: 'Tenant improvements, permits, architect, PM.' },
+]
+
 export default function FlipModel() {
   const [useDebt, setUseDebt] = useState(false)
   const [tenantTier, setTenantTier] = useState('corp')
+  const [rehabMode, setRehabMode] = useState('simple')
+  const [rehabPerSf, setRehabPerSf] = useState(0)
+  const [rehabLines, setRehabLines] = useState({
+    demo: 0, shell: 0, mep: 0, exterior: 0, interior: 0, tiSoft: 0,
+  })
+  const setLine = (k, v) => setRehabLines(p => ({ ...p, [k]: v }))
   const [f, setF] = useState({
-    acquisitionPrice: 0, closingCostsPct: 2, rehabBudget: 0, contingencyPct: 10,
+    acquisitionPrice: 0, closingCostsPct: 2, contingencyPct: 10,
     holdPeriod: 12, monthlyHoldCosts: 0,
     buildingSf: 0, marketRent: 0, vacancyPct: 5, opexPct: 5, exitCapRate: 6.50,
     sellingCostsPct: 6,
     ltcPct: 80, intRate: 11, points: 2,
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+
+  const rehabBudget = useMemo(() => {
+    if (rehabMode === 'simple') return rehabPerSf * f.buildingSf
+    return REHAB_LINES.reduce((sum, { key }) => sum + (rehabLines[key] || 0), 0)
+  }, [rehabMode, rehabPerSf, f.buildingSf, rehabLines])
 
   // Apply a tenant tier — updates cap rate
   const applyTier = (tierId) => {
@@ -48,8 +68,8 @@ export default function FlipModel() {
 
     // Costs
     const closingCosts = f.acquisitionPrice * (f.closingCostsPct / 100)
-    const contingency = f.rehabBudget * (f.contingencyPct / 100)
-    const rehabTotal = f.rehabBudget + contingency
+    const contingency = rehabBudget * (f.contingencyPct / 100)
+    const rehabTotal = rehabBudget + contingency
     const totalHold = f.monthlyHoldCosts * f.holdPeriod
     const projectCost = f.acquisitionPrice + closingCosts + rehabTotal
 
@@ -86,7 +106,7 @@ export default function FlipModel() {
       totalInvestment, sellingCostsDollar, grossProfit, netProfit,
       roi, cashOnCash, annualizedRoi, profitPerMonth, breakEven, breakEvenCap, maxOffer70,
     }
-  }, [f, useDebt])
+  }, [f, useDebt, rehabBudget])
 
   const profitClass = calc.netProfit >= 0 ? s.positive : s.negative
   const offerClass = f.acquisitionPrice > 0 && calc.maxOffer70 > 0
@@ -95,10 +115,17 @@ export default function FlipModel() {
 
   const activeTier = TENANT_TIERS.find(t => t.id === tenantTier)
 
+  const rehabInputs = rehabMode === 'simple'
+    ? [{ label: 'Rehab Budget', value: `${fmt$(rehabBudget)} ($${rehabPerSf.toFixed(2)}/SF × ${f.buildingSf.toLocaleString()} SF)` }]
+    : [
+        { label: 'Rehab Budget', value: fmt$(rehabBudget) },
+        ...REHAB_LINES.map(({ key, label }) => ({ label: `  ${label}`, value: fmt$(rehabLines[key] || 0) })),
+      ]
+
   const inputs = [
     { label: 'Acquisition Price', value: fmt$(f.acquisitionPrice) },
     { label: 'Closing Costs', value: `${fmtPct(f.closingCostsPct)} (${fmt$(calc.closingCosts)})` },
-    { label: 'Rehab Budget', value: fmt$(f.rehabBudget) },
+    ...rehabInputs,
     { label: 'Contingency', value: `${fmtPct(f.contingencyPct)} (${fmt$(calc.contingency)})` },
     { label: 'Hold Period', value: `${f.holdPeriod} months` },
     { label: 'Monthly Hold Costs', value: fmt$(f.monthlyHoldCosts) },
@@ -147,12 +174,49 @@ export default function FlipModel() {
   return (
     <div className={styles.splitLayout}>
       <div className={styles.inputPane}>
-        <div className={s.sectionLabel}>Purchase & Rehab</div>
+        <div className={s.sectionLabel}>Purchase</div>
         <div className={s.inputGrid}>
           <CurrencyInput label="Acquisition Price" hint="What you're paying for the property." value={f.acquisitionPrice} onChange={v => set('acquisitionPrice', v)} />
           <CurrencyInput label="Closing Costs %" hint="Title, escrow, lender fees. Typically 1–3%." value={f.closingCostsPct} onChange={v => set('closingCostsPct', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Rehab Budget" hint="Hard construction costs — materials + labor + TI." value={f.rehabBudget} onChange={v => set('rehabBudget', v)} />
-          <CurrencyInput label="Contingency %" hint="Rehab buffer for overruns. 10–15% standard." value={f.contingencyPct} onChange={v => set('contingencyPct', v)} prefix="" suffix="%" />
+        </div>
+
+        <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          Rehab Budget
+          <div className={styles.toggleRow}>
+            <button className={`${styles.toggleBtn} ${rehabMode === 'simple' ? styles.toggleActive : ''}`} onClick={() => setRehabMode('simple')}>Placeholder ($/SF)</button>
+            <button className={`${styles.toggleBtn} ${rehabMode === 'detailed' ? styles.toggleActive : ''}`} onClick={() => setRehabMode('detailed')}>Detailed Breakdown</button>
+          </div>
+        </div>
+        {rehabMode === 'simple' ? (
+          <div className={s.inputGrid}>
+            <CurrencyInput label="Rehab $/SF" hint="Rough placeholder — light retrofit $20–40, moderate $40–80, heavy/gut $80–150+." value={rehabPerSf} onChange={setRehabPerSf} prefix="$" suffix="/sf" />
+            <CurrencyInput label="Contingency %" hint="Rehab buffer for overruns. 10–15% standard." value={f.contingencyPct} onChange={v => set('contingencyPct', v)} prefix="" suffix="%" />
+          </div>
+        ) : (
+          <>
+            <div className={s.inputGrid}>
+              {REHAB_LINES.map(({ key, label, hint }) => (
+                <CurrencyInput key={key} label={label} hint={hint} value={rehabLines[key]} onChange={v => setLine(key, v)} />
+              ))}
+            </div>
+            <div className={s.inputGrid}>
+              <CurrencyInput label="Contingency %" hint="Rehab buffer for overruns. 10–15% standard." value={f.contingencyPct} onChange={v => set('contingencyPct', v)} prefix="" suffix="%" />
+            </div>
+          </>
+        )}
+        <div className={s.outputCard} style={{ marginTop: 8 }}>
+          <div className={s.outputRow}>
+            <span className={s.outputLabel}>Rehab Subtotal{rehabMode === 'simple' && f.buildingSf > 0 ? ` ($${rehabPerSf.toFixed(2)}/SF × ${f.buildingSf.toLocaleString()} SF)` : ''}</span>
+            <span className={s.outputValue}>{fmt$(rehabBudget)}</span>
+          </div>
+          <div className={s.outputRow}>
+            <span className={s.outputLabel}>+ Contingency ({fmtPct(f.contingencyPct)})</span>
+            <span className={s.outputValue}>{fmt$(calc.contingency)}</span>
+          </div>
+          <div className={s.outputRow} style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 2 }}>
+            <span className={s.outputLabel} style={{ fontWeight: 600, color: 'var(--text)' }}>Total Rehab</span>
+            <span className={`${s.outputValue} ${s.accent}`}>{fmt$(calc.rehabTotal)}</span>
+          </div>
         </div>
 
         <div className={s.sectionLabel}>Hold Period</div>
@@ -207,7 +271,7 @@ export default function FlipModel() {
           Financing
           <div className={styles.toggleRow}>
             <button className={`${styles.toggleBtn} ${!useDebt ? styles.toggleActive : ''}`} onClick={() => setUseDebt(false)}>All Cash</button>
-            <button className={`${styles.toggleBtn} ${useDebt ? styles.toggleActive : ''}`} onClick={() => setUseDebt(true)}>Hard Money</button>
+            <button className={`${styles.toggleBtn} ${useDebt ? styles.toggleActive : ''}`} onClick={() => setUseDebt(true)}>Financed</button>
           </div>
         </div>
         {useDebt && (
