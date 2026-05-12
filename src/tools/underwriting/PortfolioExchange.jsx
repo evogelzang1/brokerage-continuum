@@ -477,11 +477,18 @@ ${notesSection}
           <CurrencyInput label="Title / Escrow" hint="Aggregate closing costs (title, escrow, transfer tax) across the sale." value={sub.titleEscrow} onChange={v => set('titleEscrow', v)} />
           <CurrencyInput label="Commission %" hint="Total brokerage commission on the portfolio sale." value={sub.commissionPct} onChange={v => set('commissionPct', v)} prefix="" suffix="%" />
           <div className={s.fieldGroup}>
+            <label className={s.label}>Show Closing Costs in PDF</label>
+            <div className={styles.toggleRow}>
+              <button className={`${styles.toggleBtn} ${!showClosingCosts ? styles.toggleActive : ''}`} onClick={() => setShowClosingCosts(false)}>Hide</button>
+              <button className={`${styles.toggleBtn} ${showClosingCosts ? styles.toggleActive : ''}`} onClick={() => setShowClosingCosts(true)}>Show</button>
+            </div>
+            <div className={s.hint}>Whether the combined commission + title/escrow line appears in the seller-facing PDF and preview.</div>
+          </div>
+          <div className={s.fieldGroup}>
             <label className={s.label}>Est. Close Date (Relinquished)</label>
             <input className={s.input} type="date" value={sub.estimatedCloseDate} onChange={e => set('estimatedCloseDate', e.target.value)} />
             <div className={s.hint}>1031 identifies 45 days from close; replacement must close within 180 days.</div>
           </div>
-          <div />
         </div>
 
         <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -526,20 +533,6 @@ ${notesSection}
             <CurrencyInput label="Vacancy Stress (% NOI)" hint="Percentage haircut applied to Year-1 NOI to simulate vacancy or rent loss." value={stress.vacancyPct} onChange={v => setStressK('vacancyPct', v)} prefix="" suffix="%" />
           </div>
         )}
-
-        <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          PDF Display Options
-        </div>
-        <div className={s.inputGrid}>
-          <div className={s.fieldGroup}>
-            <label className={s.label}>Closing Costs row</label>
-            <div className={styles.toggleRow}>
-              <button className={`${styles.toggleBtn} ${!showClosingCosts ? styles.toggleActive : ''}`} onClick={() => setShowClosingCosts(false)}>Hide</button>
-              <button className={`${styles.toggleBtn} ${showClosingCosts ? styles.toggleActive : ''}`} onClick={() => setShowClosingCosts(true)}>Show</button>
-            </div>
-          </div>
-          <div />
-        </div>
 
         <div className={s.sectionLabel}>1031 Tax Deferral (Optional)</div>
         <div className={s.inputGrid}>
