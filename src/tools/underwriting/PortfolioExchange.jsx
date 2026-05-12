@@ -281,6 +281,9 @@ export default function PortfolioExchange() {
 
   const handleExport = () => {
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    const recommendedIdx = activeGoal ? scenarios.findIndex(sc => sc.goalKey === activeGoal) : -1
+    const recommendedScenario = recommendedIdx >= 0 ? scenarios[recommendedIdx] : null
+    const goalLabel = activeGoal && GOALS[activeGoal] ? GOALS[activeGoal] : ''
     const subRows = [
       ['Sale Price', fmt$(sub.salePrice)],
       ['Current NOI', fmt$(sub.noi)],
@@ -344,6 +347,9 @@ ${scenarios.map((sc, i) => sc.notes && sc.notes.trim() ? `<div class="noteBlock"
     const stressNote = stress.enabled
       ? `<div class="stressNote">Stress applied: +${stress.rateBps} bps on all loan rates, −${stress.vacancyPct}% NOI</div>`
       : ''
+    const recNote = recommendedScenario
+      ? `<div class="recBadge">★ Recommended strategy: ${recommendedScenario.name} — aligned with goal "${goalLabel}"</div>`
+      : ''
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title> </title>
 <style>
@@ -356,6 +362,9 @@ body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.2;
 .banner span{font-size:7px;opacity:.7}
 .meta{font-size:8px;color:#6e7378;margin-bottom:4px}
 .stressNote{font-size:7.5px;color:#9a6700;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:2px 8px;margin-bottom:4px;font-weight:600}
+.recBadge{font-size:7.5px;color:#0969da;background:#dbeafe;border:1px solid #93c5fd;border-radius:3px;padding:2px 8px;margin-bottom:4px;font-weight:600}
+th.recCol{background:#dbeafe;color:#0969da}
+tr td.recCol{background:#eff6ff}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .section{font-size:7.5px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:2px 0 1px;margin:4px 0 1px}
 .row{display:flex;justify-content:space-between;padding:1px 3px;font-size:7.5px;line-height:1.2}
@@ -378,6 +387,7 @@ tr.alt{background:#fafbfc}
 </style></head><body>
 <div class="banner"><h1>PORTFOLIO 1031 EXCHANGE — STRATEGY COMPARISON</h1><span>Matthews Real Estate Investment Services</span></div>
 <div class="meta">Prepared for: ${clientName} &mdash; ${dateStr}</div>
+${recNote}
 ${stressNote}
 <div class="grid">
   <div>
@@ -401,17 +411,17 @@ ${stressNote}
 
 <div class="section">Replacement Portfolio — Year 1</div>
 <table>
-  <thead><tr><th></th>${scenarios.map((sc, i) => `<th>${i + 1}. ${sc.name}</th>`).join('')}</tr></thead>
+  <thead><tr><th></th>${scenarios.map((sc, i) => `<th${i === recommendedIdx ? ' class="recCol"' : ''}>${i === recommendedIdx ? '★ ' : ''}${i + 1}. ${sc.name}</th>`).join('')}</tr></thead>
   <tbody>
-    ${rowFns.map(([label, fn], ri) => `<tr class="${ri % 2 === 0 ? 'alt' : ''}"><td>${label}</td>${calc.results.map((r, i) => `<td>${fn(r, scenarios[i])}</td>`).join('')}</tr>`).join('')}
+    ${rowFns.map(([label, fn], ri) => `<tr class="${ri % 2 === 0 ? 'alt' : ''}"><td>${label}</td>${calc.results.map((r, i) => `<td${i === recommendedIdx ? ' class="recCol"' : ''}>${fn(r, scenarios[i])}</td>`).join('')}</tr>`).join('')}
   </tbody>
 </table>
 
 <div class="section">Hold-Period Projection (${proj.years} yrs @ ${proj.appreciation.toFixed(2)}%/yr appreciation)</div>
 <table>
-  <thead><tr><th></th>${scenarios.map((sc, i) => `<th>${i + 1}. ${sc.name}</th>`).join('')}</tr></thead>
+  <thead><tr><th></th>${scenarios.map((sc, i) => `<th${i === recommendedIdx ? ' class="recCol"' : ''}>${i === recommendedIdx ? '★ ' : ''}${i + 1}. ${sc.name}</th>`).join('')}</tr></thead>
   <tbody>
-    ${projRowFns.map(([label, fn], ri) => `<tr class="${ri % 2 === 0 ? 'alt' : ''}"><td>${label}</td>${calc.results.map((r, i) => `<td>${fn(r, scenarios[i])}</td>`).join('')}</tr>`).join('')}
+    ${projRowFns.map(([label, fn], ri) => `<tr class="${ri % 2 === 0 ? 'alt' : ''}"><td>${label}</td>${calc.results.map((r, i) => `<td${i === recommendedIdx ? ' class="recCol"' : ''}>${fn(r, scenarios[i])}</td>`).join('')}</tr>`).join('')}
   </tbody>
 </table>
 
@@ -657,6 +667,7 @@ ${notesSection}
           refi={refi}
           proj={proj}
           stress={stress}
+          activeGoal={activeGoal}
           onExport={handleExport}
           onClose={() => setPreviewOpen(false)}
         />
@@ -680,7 +691,10 @@ ${notesSection}
   )
 }
 
-function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, stress, onExport, onClose }) {
+function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, stress, activeGoal, onExport, onClose }) {
+  const recommendedIdx = activeGoal ? scenarios.findIndex(sc => sc.goalKey === activeGoal) : -1
+  const recommendedScenario = recommendedIdx >= 0 ? scenarios[recommendedIdx] : null
+  const goalLabel = activeGoal && GOALS[activeGoal] ? GOALS[activeGoal] : ''
   const p = {
     outer: { width: 460, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', position: 'sticky', top: 0, background: '#fff' },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg-hover)' },
@@ -692,6 +706,9 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     bannerSub: { fontSize: 7.5, opacity: 0.7 },
     meta: { fontSize: 8.5, color: '#6e7378', marginBottom: 6 },
     stressBadge: { fontSize: 8, color: '#9a6700', background: '#fffbe6', border: '1px solid #f0cc4a', borderRadius: 3, padding: '3px 8px', marginBottom: 6, fontWeight: 600 },
+    recBadge: { fontSize: 8, color: '#0969da', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: 3, padding: '3px 8px', marginBottom: 6, fontWeight: 600 },
+    recTh: { background: '#dbeafe', color: '#0969da' },
+    recTd: { background: '#eff6ff' },
     grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
     section: { fontSize: 8, fontWeight: 700, color: '#0969da', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #d0d7de', padding: '3px 0 1px', margin: '6px 0 2px' },
     row: { display: 'flex', justifyContent: 'space-between', padding: '1px 3px', fontSize: 8.5, lineHeight: 1.25 },
@@ -760,6 +777,9 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             <span style={p.bannerSub}>Matthews REIS</span>
           </div>
           <div style={p.meta}>Prepared for: {clientName} — {previewDate}</div>
+          {recommendedScenario && (
+            <div style={p.recBadge}>★ Recommended strategy: {recommendedScenario.name} — aligned with goal "{goalLabel}"</div>
+          )}
           {stress.enabled && (
             <div style={p.stressBadge}>Stress applied: +{stress.rateBps} bps rates, −{stress.vacancyPct}% NOI</div>
           )}
@@ -810,14 +830,14 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             <thead>
               <tr>
                 <th style={{ ...p.th, ...p.thFirst }}></th>
-                {scenarios.map((sc, i) => <th key={i} style={p.th}>{i + 1}. {sc.name}</th>)}
+                {scenarios.map((sc, i) => <th key={i} style={{ ...p.th, ...(i === recommendedIdx ? p.recTh : {}) }}>{i === recommendedIdx ? '★ ' : ''}{i + 1}. {sc.name}</th>)}
               </tr>
             </thead>
             <tbody>
               {rowFns.map(([label, fn], ri) => (
                 <tr key={label} style={ri % 2 === 0 ? p.trAlt : {}}>
                   <td style={{ ...p.td, ...p.tdFirst }}>{label}</td>
-                  {calc.results.map((r, i) => <td key={i} style={p.td}>{fn(r, scenarios[i])}</td>)}
+                  {calc.results.map((r, i) => <td key={i} style={{ ...p.td, ...(i === recommendedIdx ? p.recTd : {}) }}>{fn(r, scenarios[i])}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -828,14 +848,14 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             <thead>
               <tr>
                 <th style={{ ...p.th, ...p.thFirst }}></th>
-                {scenarios.map((sc, i) => <th key={i} style={p.th}>{i + 1}</th>)}
+                {scenarios.map((sc, i) => <th key={i} style={{ ...p.th, ...(i === recommendedIdx ? p.recTh : {}) }}>{i === recommendedIdx ? '★ ' : ''}{i + 1}</th>)}
               </tr>
             </thead>
             <tbody>
               {projRows.map(([label, fn], ri) => (
                 <tr key={label} style={ri % 2 === 0 ? p.trAlt : {}}>
                   <td style={{ ...p.td, ...p.tdFirst }}>{label}</td>
-                  {calc.results.map((r, i) => <td key={i} style={p.td}>{fn(r, scenarios[i])}</td>)}
+                  {calc.results.map((r, i) => <td key={i} style={{ ...p.td, ...(i === recommendedIdx ? p.recTd : {}) }}>{fn(r, scenarios[i])}</td>)}
                 </tr>
               ))}
             </tbody>
