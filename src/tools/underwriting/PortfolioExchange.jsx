@@ -79,6 +79,7 @@ const DEFAULT_SUB = {
   titleEscrow: 75_000,
   commissionPct: 2,
   estimatedTaxLiability: 0,
+  estimatedCloseDate: new Date().toISOString().slice(0, 10),  // yyyy-mm-dd
 }
 
 const DEFAULT_PROJ = {
@@ -257,9 +258,12 @@ export default function PortfolioExchange() {
 
     const totalTaxBill = Math.max(0, sub.estimatedTaxLiability)
 
-    const today = new Date()
-    const id45 = new Date(today.getTime() + 45 * 86400000)
-    const close180 = new Date(today.getTime() + 180 * 86400000)
+    // 1031 deadlines run from the relinquished close — not "today." Broker
+    // enters the estimated close date; falls back to today if blank/invalid.
+    const closeBase = sub.estimatedCloseDate ? new Date(sub.estimatedCloseDate + 'T00:00:00') : new Date()
+    const anchorDate = isNaN(closeBase.getTime()) ? new Date() : closeBase
+    const id45 = new Date(anchorDate.getTime() + 45 * 86400000)
+    const close180 = new Date(anchorDate.getTime() + 180 * 86400000)
 
     const results = scenarios.map(sc => {
       const isCashAcq = sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
@@ -462,6 +466,12 @@ ${notesSection}
           <CurrencyInput label="Current Portfolio NOI" hint="Combined trailing or Year-1 NOI of the portfolio being sold." value={sub.noi} onChange={v => set('noi', v)} />
           <CurrencyInput label="Title / Escrow" hint="Aggregate closing costs (title, escrow, transfer tax) across the sale." value={sub.titleEscrow} onChange={v => set('titleEscrow', v)} />
           <CurrencyInput label="Commission %" hint="Total brokerage commission on the portfolio sale." value={sub.commissionPct} onChange={v => set('commissionPct', v)} prefix="" suffix="%" />
+          <div className={s.fieldGroup}>
+            <label className={s.label}>Est. Close Date (Relinquished)</label>
+            <input className={s.input} type="date" value={sub.estimatedCloseDate} onChange={e => set('estimatedCloseDate', e.target.value)} />
+            <div className={s.hint}>1031 identifies 45 days from close; replacement must close within 180 days.</div>
+          </div>
+          <div />
         </div>
 
         <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

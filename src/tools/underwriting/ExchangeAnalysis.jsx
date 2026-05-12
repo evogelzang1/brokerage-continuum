@@ -35,6 +35,7 @@ export default function ExchangeAnalysis() {
     exitCap: 4.95, noi: 87120,
     titleEscrow: 10000, commissionPct: 4,
     estimatedTaxLiability: 0,
+    estimatedCloseDate: new Date().toISOString().slice(0, 10),
     origLoanBal: 350000, intRate: 5, amort: 25, term: 10, currLoanBal: 300000,
   })
   const [repls, setRepls] = useState([
@@ -64,9 +65,11 @@ export default function ExchangeAnalysis() {
     const brokerComm = salePrice * (sub.commissionPct / 100)
     const equity1031 = salePrice - sub.currLoanBal - sub.titleEscrow - brokerComm
 
-    const today = new Date()
-    const id45 = new Date(today.getTime() + 45 * 86400000)
-    const close180 = new Date(today.getTime() + 180 * 86400000)
+    // 1031 deadlines run from the relinquished close — not "today."
+    const closeBase = sub.estimatedCloseDate ? new Date(sub.estimatedCloseDate + 'T00:00:00') : new Date()
+    const anchorDate = isNaN(closeBase.getTime()) ? new Date() : closeBase
+    const id45 = new Date(anchorDate.getTime() + 45 * 86400000)
+    const close180 = new Date(anchorDate.getTime() + 180 * 86400000)
 
     const options = repls.map(r => {
       const price = r.capRate > 0 ? r.noi / (r.capRate / 100) : 0
@@ -217,6 +220,12 @@ ${calc.totalTaxBill > 0
           <CurrencyInput label="Exit Cap Rate" hint="Cap rate used to value the sale. Sale price = NOI ÷ cap rate." value={sub.exitCap} onChange={v => set('exitCap', v)} prefix="" suffix="%" />
           <CurrencyInput label="Title / Escrow" hint="Closing costs on sale (title, escrow, transfer tax)." value={sub.titleEscrow} onChange={v => set('titleEscrow', v)} />
           <CurrencyInput label="Commission %" hint="Total brokerage commission on the sale." value={sub.commissionPct} onChange={v => set('commissionPct', v)} prefix="" suffix="%" />
+          <div className={s.fieldGroup}>
+            <label className={s.label}>Est. Close Date (Relinquished)</label>
+            <input className={s.input} type="date" value={sub.estimatedCloseDate} onChange={e => set('estimatedCloseDate', e.target.value)} />
+            <div className={s.hint}>1031 deadlines run 45/180 days from this close.</div>
+          </div>
+          <div />
         </div>
 
         <div className={s.sectionLabel}>1031 Tax Deferral (Optional)</div>
