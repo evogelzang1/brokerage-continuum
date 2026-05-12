@@ -30,18 +30,18 @@ export function exportToolPdf({ title, subtitle, inputs, outputs, footnotes }) {
 @page{size:letter;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0;padding:0}
-body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.35;font-size:9.5px;padding:.35in}
+body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.25;font-size:8.5px;padding:.3in}
 .wrap{max-width:100%;margin:0 auto;padding:0}
-.banner{background:#101828;color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:4px}
-.banner h1{font-size:13px;margin:0;font-weight:700;letter-spacing:.02em}
-.banner span{font-size:8px;opacity:.75}
-.meta{font-size:9px;color:#6e7378;margin-bottom:10px}
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.section{font-size:9px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:4px 0 2px;margin:8px 0 3px}
-.row{display:flex;justify-content:space-between;padding:2px 4px;font-size:9.5px;line-height:1.3}
+.banner{background:#101828;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:3px}
+.banner h1{font-size:12px;margin:0;font-weight:700;letter-spacing:.02em}
+.banner span{font-size:7.5px;opacity:.75}
+.meta{font-size:8.5px;color:#6e7378;margin-bottom:6px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.section{font-size:8.5px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:3px 0 1px;margin:5px 0 2px}
+.row{display:flex;justify-content:space-between;padding:1.5px 4px;font-size:8.5px;line-height:1.25}
 .row:nth-child(even){background:#f5f7fa}
 .row span:first-child{color:#6e7378}.row span:last-child{font-weight:600}
-.footer{margin-top:10px;font-size:7.5px;color:#999;border-top:1px solid #d0d7de;padding-top:4px;text-align:center}
+.footer{margin-top:6px;font-size:7px;color:#999;border-top:1px solid #d0d7de;padding-top:3px;text-align:center}
 </style></head><body><div class="wrap">
 <div class="banner"><h1>${escapeHtml(title.toUpperCase())}</h1><span>Matthews Real Estate Investment Services</span></div>
 <div class="meta">${subtitle ? escapeHtml(subtitle) + ' — ' : ''}${escapeHtml(dateStr)}</div>

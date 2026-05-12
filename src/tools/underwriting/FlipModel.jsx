@@ -29,6 +29,7 @@ const REHAB_LINES = [
 export default function FlipModel() {
   const [useDebt, setUseDebt] = useState(false)
   const [tenantTier, setTenantTier] = useState('corp')
+  const [previewOpen, setPreviewOpen] = useState(true)
   const [rehabMode, setRehabMode] = useState('simple')
   const [rehabPerSf, setRehabPerSf] = useState(0)
   const [rehabLines, setRehabLines] = useState({
@@ -305,13 +306,31 @@ export default function FlipModel() {
         </div>
       </div>
 
-      <SimplePreview
-        title="Flip Model"
-        subtitle="Buy / Rehab / Sell Analysis"
-        inputs={inputs}
-        outputs={outputs}
-        onExport={handleExport}
-      />
+      {previewOpen ? (
+        <SimplePreview
+          title="Flip Model"
+          subtitle="Buy / Rehab / Sell Analysis"
+          inputs={inputs}
+          outputs={outputs}
+          onExport={handleExport}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : (
+        <button
+          onClick={() => setPreviewOpen(true)}
+          style={{
+            position: 'sticky', top: 0, height: 'fit-content',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+            color: 'var(--text-muted)', background: 'var(--bg-card)',
+            border: '1px solid var(--border)', borderRadius: 6,
+            padding: '8px 6px', cursor: 'pointer', writingMode: 'vertical-rl',
+            textOrientation: 'mixed', letterSpacing: '0.04em',
+          }}
+          title="Show PDF preview"
+        >
+          ◀ Show Preview
+        </button>
+      )}
     </div>
   )
 }

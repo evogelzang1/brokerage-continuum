@@ -75,8 +75,7 @@ const DEFAULT_SUB = {
   noi: 1_450_000,
   hasDebt: true,
   currLoanBal: 10_000_000,
-  intRate: 5,
-  amort: 25,
+  monthlyDebtService: 58_459,  // ~$10M @ 5% / 25yr; broker just asks "what's the mortgage payment"
   titleEscrow: 75_000,
   commissionPct: 2,
   estimatedTaxLiability: 0,
@@ -249,8 +248,7 @@ export default function PortfolioExchange() {
     const brokerComm = sub.salePrice * (sub.commissionPct / 100)
     const equity1031 = Math.max(0, sub.salePrice - currLoanBal - sub.titleEscrow - brokerComm)
 
-    const sMRate = sub.intRate / 100 / 12
-    const sAnnDS = currLoanBal > 0 ? -PMT(sMRate, sub.amort * 12, currLoanBal) * 12 : 0
+    const sAnnDS = sub.hasDebt ? (sub.monthlyDebtService || 0) * 12 : 0
     const sCF = sub.noi - sAnnDS
     const sEquity = Math.max(0, sub.salePrice - currLoanBal)
     const sCoC = sEquity > 0 ? sCF / sEquity : 0
@@ -466,8 +464,7 @@ ${notesSection}
         {sub.hasDebt && (
           <div className={s.inputGrid}>
             <CurrencyInput label="Current Loan Balance" hint="Aggregate outstanding debt across the portfolio — deducted from sale proceeds." value={sub.currLoanBal} onChange={v => set('currLoanBal', v)} />
-            <CurrencyInput label="Interest Rate" hint="Blended rate on existing debt (used for current debt-service)." value={sub.intRate} onChange={v => set('intRate', v)} prefix="" suffix="%" />
-            <CurrencyInput label="Amortization (yrs)" hint="Blended amort schedule for the existing portfolio debt." value={sub.amort} onChange={v => set('amort', v)} prefix="" />
+            <CurrencyInput label="Monthly Debt Service" hint="What the seller is paying per month across the portfolio. Easier and more accurate than deriving from rate + amort." value={sub.monthlyDebtService} onChange={v => set('monthlyDebtService', v)} />
           </div>
         )}
 

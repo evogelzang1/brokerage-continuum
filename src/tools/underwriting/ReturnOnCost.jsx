@@ -17,6 +17,7 @@ function PMT(rate, nper, pv) {
 
 export default function ReturnOnCost() {
   const [useDebt, setUseDebt] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(true)
   const [f, setF] = useState({
     acquisitionPrice: 0, closingCostsPct: 2, rehabCapex: 0,
     constructionMonths: 12, rentLossPct: 100,
@@ -195,13 +196,31 @@ export default function ReturnOnCost() {
         </div>
       </div>
 
-      <SimplePreview
-        title="Return on Cost"
-        subtitle="Value-Add / Development Yield Analysis"
-        inputs={inputs}
-        outputs={outputs}
-        onExport={handleExport}
-      />
+      {previewOpen ? (
+        <SimplePreview
+          title="Return on Cost"
+          subtitle="Value-Add / Development Yield Analysis"
+          inputs={inputs}
+          outputs={outputs}
+          onExport={handleExport}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : (
+        <button
+          onClick={() => setPreviewOpen(true)}
+          style={{
+            position: 'sticky', top: 0, height: 'fit-content',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+            color: 'var(--text-muted)', background: 'var(--bg-card)',
+            border: '1px solid var(--border)', borderRadius: 6,
+            padding: '8px 6px', cursor: 'pointer', writingMode: 'vertical-rl',
+            textOrientation: 'mixed', letterSpacing: '0.04em',
+          }}
+          title="Show PDF preview"
+        >
+          ◀ Show Preview
+        </button>
+      )}
     </div>
   )
 }

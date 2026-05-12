@@ -30,10 +30,11 @@ const EMPTY_REPL = { name: '', noi: 0, capRate: 6.5, leaseType: 'Absolute Net', 
 
 export default function ExchangeAnalysis() {
   const [replDebt, setReplDebt] = useState(true)
+  const [previewOpen, setPreviewOpen] = useState(true)
   const [sub, setSub] = useState({
-    exitCap: 4.95, noi: 87120, goingInPrice: 800000,
-    yearsHeld: 10, depreciationPct: 80,
+    exitCap: 4.95, noi: 87120,
     titleEscrow: 10000, commissionPct: 4,
+    estimatedTaxLiability: 0,
     origLoanBal: 350000, intRate: 5, amort: 25, term: 10, currLoanBal: 300000,
   })
   const [repls, setRepls] = useState([
@@ -48,17 +49,10 @@ export default function ExchangeAnalysis() {
 
   const calc = useMemo(() => {
     const salePrice = sub.exitCap > 0 ? sub.noi / (sub.exitCap / 100) : 0
-    const appreciation = salePrice - sub.goingInPrice
-    const depreciableBasis = sub.goingInPrice * (sub.depreciationPct / 100)
-    const annualDepr = depreciableBasis / 27.5
-    const accumDepr = Math.min(annualDepr * sub.yearsHeld, depreciableBasis)
-    const taxBasis = sub.goingInPrice - accumDepr
-    const capitalGain = Math.max(salePrice - sub.goingInPrice, 0)
-    const depRecapture = accumDepr
-    const capGainsTax = capitalGain * 0.238
-    const depRecapTax = depRecapture * 0.25
-    const totalTaxBill = capGainsTax + depRecapTax
-    const taxSaved = totalTaxBill
+    // Tax deferral — optional CPA estimate. Single-asset basis derivation
+    // is plausible but still subject to state tax, NIIT thresholds, prior
+    // 1031 carryover, and depreciation-method variation — defer to CPA.
+    const totalTaxBill = Math.max(0, sub.estimatedTaxLiability)
 
     const sMRate = sub.intRate / 100 / 12
     const sAnnDebt = sub.origLoanBal > 0 ? -PMT(sMRate, sub.amort * 12, sub.origLoanBal) * 12 : 0
@@ -77,10 +71,13 @@ export default function ExchangeAnalysis() {
     const options = repls.map(r => {
       const price = r.capRate > 0 ? r.noi / (r.capRate / 100) : 0
       const capRate = r.capRate / 100
+      // 1031-safe check: replacement price must be ≥ relinquished sale price.
+      // Any shortfall is mortgage/equity boot that becomes taxable.
+      const boot = Math.max(0, salePrice - price)
 
       if (!replDebt) {
         return {
-          capRate, price, downPayment: equity1031, additionalCash: price - equity1031,
+          capRate, price, boot, downPayment: equity1031, additionalCash: price - equity1031,
           cashOnCash: equity1031 > 0 ? r.noi / equity1031 : 0,
           cfDelta: r.noi - sCF, ...r,
         }
@@ -99,14 +96,14 @@ export default function ExchangeAnalysis() {
       const cfDelta = netCash - sCF
 
       return {
-        capRate, price, loanAmt, ltv, annDS, princRedux, dscr, debtYield,
+        capRate, price, boot, loanAmt, ltv, annDS, princRedux, dscr, debtYield,
         netCash, cashReturn, totalReturn, equity: equity1031, cfDelta, ...r,
       }
     })
 
     return {
-      salePrice, appreciation, equity1031, brokerComm,
-      taxBasis, accumDepr, capitalGain, depRecapture, capGainsTax, depRecapTax, totalTaxBill, taxSaved,
+      salePrice, equity1031, brokerComm,
+      totalTaxBill,
       sAnnDebt, sMonthDebt, sEquity, sCF, sROE,
       id45, close180, options,
     }
@@ -116,22 +113,22 @@ export default function ExchangeAnalysis() {
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     const subRows = [
       ['Current NOI', fmt$(sub.noi)], ['Exit Cap Rate', fmtPct(sub.exitCap / 100)],
-      ['Sale Price', fmt$(calc.salePrice)], ['Original Purchase Price', fmt$(sub.goingInPrice)],
-      ['Value Appreciation', fmt$(calc.appreciation)], ['Current Loan Balance', fmt$(sub.currLoanBal)],
+      ['Sale Price', fmt$(calc.salePrice)],
+      ['Current Loan Balance', fmt$(sub.currLoanBal)],
       ['Annual Debt Service', fmt$(calc.sAnnDebt)], ['Cash Flow After Debt', fmt$(calc.sCF)],
-      ['Return on Equity', fmtPct(calc.sROE)], [`Commission (${sub.commissionPct}%)`, fmt$(calc.brokerComm)],
+      ['Return on Equity', fmtPct(calc.sROE)],
+      ['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)],
     ]
-    const taxRows = [
-      ['Adjusted Tax Basis', fmt$(calc.taxBasis)], [`Accum. Depreciation (${sub.yearsHeld} yrs)`, fmt$(calc.accumDepr)],
-      ['Capital Gains Tax (23.8%)', fmt$(calc.capGainsTax)], ['Depreciation Recapture (25%)', fmt$(calc.depRecapTax)],
-    ]
+    const bootRow = ['Mortgage Boot (taxable)', o => o.boot > 0 ? fmt$(o.boot) : '—']
     const replMetrics = replDebt
       ? [['NOI', o => fmt$(o.noi)], ['Purchase Price', o => fmt$(o.price)], ['Cap Rate', o => fmtPct(o.capRate)],
+         bootRow,
          ['Debt Required', o => fmt$(o.loanAmt)], ['LTV', o => fmtPct(o.ltv)], ['Debt Service (Ann)', o => fmt$(o.annDS)],
          ['DSCR', o => o.dscr.toFixed(2) + 'x'], ['Net Cash (Annual)', o => fmt$(o.netCash)],
          ['Cash Return', o => fmtPct(o.cashReturn)], ['Total Return', o => fmtPct(o.totalReturn)],
          ['CF vs Subject', o => `${o.cfDelta >= 0 ? '+' : ''}${fmt$(o.cfDelta)}/yr`]]
       : [['NOI', o => fmt$(o.noi)], ['Purchase Price', o => fmt$(o.price)], ['Cap Rate', o => fmtPct(o.capRate)],
+         bootRow,
          ['1031 Equity', () => fmt$(calc.equity1031)], ['Additional Cash', o => fmt$(o.additionalCash)],
          ['Cash-on-Cash', o => fmtPct(o.cashOnCash)], ['CF vs Subject', o => `${o.cfDelta >= 0 ? '+' : ''}${fmt$(o.cfDelta)}/yr`],
          ['Lease Type', o => o.leaseType], ['Lease Years', o => String(o.leaseYears)]]
@@ -141,30 +138,30 @@ export default function ExchangeAnalysis() {
 @page{size:letter;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0;padding:0}
-body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:9px;-webkit-print-color-adjust:exact;padding:.3in}
+body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.2;font-size:8px;padding:.25in}
 .wrap{max-width:100%;margin:0 auto}
-.banner{background:#101828;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:4px}
-.banner h1{font-size:12px;margin:0;font-weight:700}
-.banner span{font-size:7.5px;opacity:.7}
-.meta{font-size:8.5px;color:#6e7378;margin-bottom:6px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.section{font-size:8px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:3px 0 1px;margin:4px 0 2px}
-.row{display:flex;justify-content:space-between;padding:1px 3px;font-size:8.5px;line-height:1.25}
+.banner{background:#101828;color:#fff;padding:5px 10px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:3px}
+.banner h1{font-size:11px;margin:0;font-weight:700}
+.banner span{font-size:7px;opacity:.7}
+.meta{font-size:8px;color:#6e7378;margin-bottom:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.section{font-size:7.5px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:2px 0 1px;margin:4px 0 2px}
+.row{display:flex;justify-content:space-between;padding:1px 3px;font-size:8px;line-height:1.2}
 .row span:first-child{color:#6e7378}.row span:last-child{font-weight:600}
 .alt{background:#f5f7fa}
 .hl{border-top:1px solid #d0d7de;margin-top:2px;padding-top:2px}
 .hl span:last-child{color:#22783c;font-weight:700}
-.deadlines{display:flex;gap:6px;margin:6px 0}
-.deadlines>div{flex:1;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:3px 5px;text-align:center}
-.deadlines span:first-child{color:#6e7378;font-weight:600;display:block;font-size:7.5px}
-.deadlines span:last-child{color:#9a6700;font-weight:700;font-size:9px}
-table{width:100%;border-collapse:collapse;font-size:8px;margin-top:3px}
-th{text-align:right;padding:2px 4px;font-weight:700;border-bottom:1px solid #d0d7de;background:#f5f7fa}
+.deadlines{display:flex;gap:6px;margin:4px 0}
+.deadlines>div{flex:1;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:2px 4px;text-align:center}
+.deadlines span:first-child{color:#6e7378;font-weight:600;display:block;font-size:7px}
+.deadlines span:last-child{color:#9a6700;font-weight:700;font-size:8.5px}
+table{width:100%;border-collapse:collapse;font-size:8px;margin-top:2px}
+th{text-align:right;padding:1.5px 4px;font-weight:700;border-bottom:1px solid #d0d7de;background:#f5f7fa}
 th:first-child{text-align:left}
-td{text-align:right;padding:2px 4px;font-size:8px}
+td{text-align:right;padding:1.5px 4px;font-size:8px}
 td:first-child{text-align:left;color:#6e7378;font-weight:500}
 tr.alt{background:#fafbfc}
-.footer{margin-top:6px;font-size:7px;color:#999;border-top:1px solid #d0d7de;padding-top:3px;text-align:center}
+.footer{margin-top:4px;font-size:6.5px;color:#999;border-top:1px solid #d0d7de;padding-top:2px;text-align:center}
 </style></head><body><div class="wrap">
 <div class="banner"><h1>1031 EXCHANGE ANALYSIS</h1><span>Matthews Real Estate Investment Services</span></div>
 <div class="meta">Prepared for: ${clientName} &mdash; ${dateStr}</div>
@@ -175,9 +172,10 @@ ${subRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><spa
 <div class="row hl"><span>Total Equity for 1031</span><span>${fmt$(calc.equity1031)}</span></div>
 </div>
 <div>
-<div class="section">Tax Deferral</div>
-${taxRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><span>${v}</span></div>`).join('')}
-<div class="row hl"><span>Tax Saved via 1031</span><span>${fmt$(calc.taxSaved)}</span></div>
+<div class="section">1031 Exchange Mechanics</div>
+${calc.totalTaxBill > 0
+  ? `<div class="row hl"><span>Tax Deferred via 1031 (CPA estimate)</span><span>${fmt$(calc.totalTaxBill)}</span></div>`
+  : `<div class="row"><span>Estimated Tax Deferred</span><span>Per seller's CPA</span></div>`}
 <div class="deadlines"><div><span>45-Day ID</span><span>${fmtDate(calc.id45)}</span></div><div><span>180-Day Close</span><span>${fmtDate(calc.close180)}</span></div></div>
 </div>
 </div>
@@ -217,11 +215,14 @@ ${taxRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><spa
         <div className={s.inputGrid}>
           <CurrencyInput label="Current NOI" hint="Current year net operating income of the property being sold." value={sub.noi} onChange={v => set('noi', v)} />
           <CurrencyInput label="Exit Cap Rate" hint="Cap rate used to value the sale. Sale price = NOI ÷ cap rate." value={sub.exitCap} onChange={v => set('exitCap', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Original Purchase Price" hint="What the seller paid when they acquired the property." value={sub.goingInPrice} onChange={v => set('goingInPrice', v)} />
-          <CurrencyInput label="Years Held" hint="How long the seller has owned it. Drives depreciation schedule." value={sub.yearsHeld} onChange={v => set('yearsHeld', v)} prefix="" />
-          <CurrencyInput label="Depreciable % (building)" hint="% of purchase price that's building vs. land. Land doesn't depreciate. 75–85% typical." value={sub.depreciationPct} onChange={v => set('depreciationPct', v)} prefix="" suffix="%" />
           <CurrencyInput label="Title / Escrow" hint="Closing costs on sale (title, escrow, transfer tax)." value={sub.titleEscrow} onChange={v => set('titleEscrow', v)} />
           <CurrencyInput label="Commission %" hint="Total brokerage commission on the sale." value={sub.commissionPct} onChange={v => set('commissionPct', v)} prefix="" suffix="%" />
+        </div>
+
+        <div className={s.sectionLabel}>1031 Tax Deferral (Optional)</div>
+        <div className={s.inputGrid}>
+          <CurrencyInput label="Est. Tax Liability if Sold (per CPA)" hint="Optional. Paste the seller's CPA estimate of federal + state tax owed on an outright sale. Displayed as 'Tax Deferred via 1031.' Leave blank to omit — depreciation method, state tax, NIIT, and prior 1031 carryover make this hard to derive accurately here." value={sub.estimatedTaxLiability} onChange={v => set('estimatedTaxLiability', v)} />
+          <div />
         </div>
 
         <div className={s.sectionLabel}>Existing Debt</div>
@@ -264,6 +265,9 @@ ${taxRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><spa
               </div>
               <div className={styles.replResults}>
                 <div className={styles.replRow}><span>Purchase Price</span><span>{fmt$(opt.price)}</span></div>
+                {opt.boot > 0 && (
+                  <div className={`${styles.replRow} ${s.warning}`}><span>Mortgage Boot (taxable)</span><span>{fmt$(opt.boot)}</span></div>
+                )}
                 <div className={styles.replRow}><span>1031 Equity</span><span>{fmt$(calc.equity1031)}</span></div>
                 {replDebt && <>
                   <div className={styles.replRow}><span>Debt Required</span><span>{fmt$(opt.loanAmt)}</span></div>
@@ -287,26 +291,43 @@ ${taxRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><spa
         </div>
       </div>
 
-      {/* Preview Pane — matches print output exactly */}
-      <Preview1031
-        clientName={clientName}
-        previewDate={previewDate}
-        sub={sub}
-        calc={calc}
-        repls={repls}
-        replDebt={replDebt}
-        replMetricsPreview={replMetricsPreview}
-        fmt$={fmt$}
-        fmtPct={fmtPct}
-        fmtDate={fmtDate}
-        onExport={handleExport}
-      />
+      {previewOpen ? (
+        <Preview1031
+          clientName={clientName}
+          previewDate={previewDate}
+          sub={sub}
+          calc={calc}
+          repls={repls}
+          replDebt={replDebt}
+          replMetricsPreview={replMetricsPreview}
+          fmt$={fmt$}
+          fmtPct={fmtPct}
+          fmtDate={fmtDate}
+          onExport={handleExport}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : (
+        <button
+          onClick={() => setPreviewOpen(true)}
+          style={{
+            position: 'sticky', top: 0, height: 'fit-content',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+            color: 'var(--text-muted)', background: 'var(--bg-card)',
+            border: '1px solid var(--border)', borderRadius: 6,
+            padding: '8px 6px', cursor: 'pointer', writingMode: 'vertical-rl',
+            textOrientation: 'mixed', letterSpacing: '0.04em',
+          }}
+          title="Show PDF preview"
+        >
+          ◀ Show Preview
+        </button>
+      )}
     </div>
   )
 }
 
 // Print-matching preview for 1031 Exchange — inline styles mirror the exported HTML
-function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, replMetricsPreview, fmt$, fmtPct, fmtDate, onExport }) {
+function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, replMetricsPreview, fmt$, fmtPct, fmtDate, onExport, onClose }) {
   const p = {
     outer: { width: 460, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', position: 'sticky', top: 0, background: '#fff' },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg-hover)' },
@@ -342,26 +363,23 @@ function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, repl
     ['Current NOI', fmt$(sub.noi)],
     ['Exit Cap Rate', fmtPct(sub.exitCap / 100)],
     ['Sale Price', fmt$(calc.salePrice)],
-    ['Original Purchase Price', fmt$(sub.goingInPrice)],
-    ['Value Appreciation', fmt$(calc.appreciation)],
     ['Current Loan Balance', fmt$(sub.currLoanBal)],
     ['Annual Debt Service', fmt$(calc.sAnnDebt)],
     ['Cash Flow After Debt', fmt$(calc.sCF)],
     ['Return on Equity', fmtPct(calc.sROE)],
-    [`Commission (${sub.commissionPct}%)`, fmt$(calc.brokerComm)],
-  ]
-  const taxRows = [
-    ['Adjusted Tax Basis', fmt$(calc.taxBasis)],
-    [`Accum. Depreciation (${sub.yearsHeld} yrs)`, fmt$(calc.accumDepr)],
-    ['Capital Gains Tax (23.8%)', fmt$(calc.capGainsTax)],
-    ['Depreciation Recapture (25%)', fmt$(calc.depRecapTax)],
+    ['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)],
   ]
 
   return (
     <div style={p.outer}>
       <div style={p.header}>
         <span style={p.headerTitle}>PDF Preview</span>
-        <button onClick={onExport} style={{ fontSize: 12, fontWeight: 600, fontFamily: 'inherit', color: '#fff', background: 'var(--accent)', border: 'none', padding: '7px 16px', borderRadius: 6, cursor: 'pointer' }}>Export PDF</button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button onClick={onExport} style={{ fontSize: 12, fontWeight: 600, fontFamily: 'inherit', color: '#fff', background: 'var(--accent)', border: 'none', padding: '7px 16px', borderRadius: 6, cursor: 'pointer' }}>Export PDF</button>
+          {onClose && (
+            <button onClick={onClose} title="Hide preview" style={{ fontSize: 14, fontWeight: 700, fontFamily: 'inherit', color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border)', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          )}
+        </div>
       </div>
       <div style={p.body}>
         <div style={p.wrap}>
@@ -386,17 +404,18 @@ function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, repl
               </div>
             </div>
             <div>
-              <div style={p.section}>Tax Deferral</div>
-              {taxRows.map(([l, v], i) => (
-                <div key={l} style={{ ...p.row, ...(i % 2 ? p.rowAlt : {}) }}>
-                  <span style={p.rowLabel}>{l}</span>
-                  <span style={p.rowValue}>{v}</span>
+              <div style={p.section}>1031 Exchange Mechanics</div>
+              {calc.totalTaxBill > 0 ? (
+                <div style={{ ...p.row, ...p.hl }}>
+                  <span style={p.rowLabel}>Tax Deferred via 1031 (per CPA)</span>
+                  <span style={p.hlValue}>{fmt$(calc.totalTaxBill)}</span>
                 </div>
-              ))}
-              <div style={{ ...p.row, ...p.hl }}>
-                <span style={p.rowLabel}>Tax Saved via 1031</span>
-                <span style={p.hlValue}>{fmt$(calc.taxSaved)}</span>
-              </div>
+              ) : (
+                <div style={p.row}>
+                  <span style={p.rowLabel}>Estimated Tax Deferred</span>
+                  <span style={p.rowValue}>Per seller's CPA</span>
+                </div>
+              )}
               <div style={p.deadlines}>
                 <div style={p.deadlineBox}>
                   <span style={p.deadlineLabel}>45-Day ID</span>

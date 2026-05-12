@@ -80,14 +80,19 @@ const printStyles = {
   previewBody: { maxHeight: 700, overflowY: 'auto' },
 }
 
-export default function SimplePreview({ title, subtitle, inputs, outputs, onExport }) {
+export default function SimplePreview({ title, subtitle, inputs, outputs, onExport, onClose }) {
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
   return (
     <div style={printStyles.previewOuter}>
       <div style={printStyles.header}>
         <span style={printStyles.headerTitle}>PDF Preview</span>
-        <button className={s.btnPrimary} onClick={onExport}>Export PDF</button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button className={s.btnPrimary} onClick={onExport}>Export PDF</button>
+          {onClose && (
+            <button onClick={onClose} title="Hide preview" style={{ fontSize: 14, fontWeight: 700, fontFamily: 'inherit', color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border)', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          )}
+        </div>
       </div>
       <div style={printStyles.previewBody}>
         <div style={printStyles.wrap}>
