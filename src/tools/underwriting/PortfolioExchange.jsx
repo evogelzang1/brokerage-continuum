@@ -221,6 +221,8 @@ export default function PortfolioExchange() {
   const [stress, setStress] = useState(DEFAULT_STRESS)
   const [activeGoal, setActiveGoal] = useState(null)
   const [previewOpen, setPreviewOpen] = useState(true)
+  const [showProjection, setShowProjection] = useState(true)
+  const [showClosingCosts, setShowClosingCosts] = useState(true)
 
   const set = (k, v) => setSub(p => ({ ...p, [k]: v }))
   const setSc = (i, k, v) => setScenarios(p => p.map((sc, j) => j === i ? { ...sc, [k]: v } : sc))
@@ -303,7 +305,7 @@ export default function PortfolioExchange() {
       ['Annual Debt Service', fmt$(calc.sAnnDS)],
       ['Annual Cash Flow', fmt$(calc.sCF)],
       ['Cash-on-Cash', fmtPct(calc.sCoC)],
-      ['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)],
+      ...(showClosingCosts ? [['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)]] : []),
     ]
 
     const isCashMode = sc => sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
@@ -429,13 +431,13 @@ ${stressNote}
   </tbody>
 </table>
 
-<div class="section">Hold-Period Projection (${proj.years} yrs @ ${proj.appreciation.toFixed(2)}%/yr appreciation)</div>
+${showProjection ? `<div class="section">Hold-Period Projection (${proj.years} yrs @ ${proj.appreciation.toFixed(2)}%/yr appreciation)</div>
 <table>
   <thead><tr><th></th>${scenarios.map((sc, i) => `<th${i === recommendedIdx ? ' class="recCol"' : ''}>${i === recommendedIdx ? '★ ' : ''}${i + 1}. ${sc.name}</th>`).join('')}</tr></thead>
   <tbody>
     ${projRowFns.map(([label, fn], ri) => `<tr class="${ri % 2 === 0 ? 'alt' : ''}"><td>${label}</td>${calc.results.map((r, i) => `<td${i === recommendedIdx ? ' class="recCol"' : ''}>${fn(r, scenarios[i])}</td>`).join('')}</tr>`).join('')}
   </tbody>
-</table>
+</table>` : ''}
 
 ${refiSection}
 ${notesSection}
@@ -496,12 +498,20 @@ ${notesSection}
           </div>
         )}
 
-        <div className={s.sectionLabel}>Hold-Period Projection</div>
-        <div className={s.inputGrid}>
-          <CurrencyInput label="Hold Period (yrs)" hint="Years to model the wealth-comparison projection (terminal value, cumulative CF, equity multiple, CAGR)." value={proj.years} onChange={v => setProjK('years', v)} prefix="" />
-          <CurrencyInput label="Appreciation (annual)" hint="Annual value + NOI growth rate applied to all scenarios. 2–4% is a reasonable national average; adjust for market." value={proj.appreciation} onChange={v => setProjK('appreciation', v)} prefix="" suffix="%" />
-          <CurrencyInput label="Selling Costs (terminal)" hint="% of terminal value spent on exit broker commission, title, transfer tax. 3–5% typical." value={proj.sellingCostsPct} onChange={v => setProjK('sellingCostsPct', v)} prefix="" suffix="%" />
+        <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          Hold-Period Projection
+          <div className={styles.toggleRow}>
+            <button className={`${styles.toggleBtn} ${!showProjection ? styles.toggleActive : ''}`} onClick={() => setShowProjection(false)}>Hide</button>
+            <button className={`${styles.toggleBtn} ${showProjection ? styles.toggleActive : ''}`} onClick={() => setShowProjection(true)}>Show</button>
+          </div>
         </div>
+        {showProjection && (
+          <div className={s.inputGrid}>
+            <CurrencyInput label="Hold Period (yrs)" hint="Years to model the wealth-comparison projection (terminal value, cumulative CF, equity multiple, CAGR)." value={proj.years} onChange={v => setProjK('years', v)} prefix="" />
+            <CurrencyInput label="Appreciation (annual)" hint="Annual value + NOI growth rate applied to all scenarios. 2–4% is a reasonable national average; adjust for market." value={proj.appreciation} onChange={v => setProjK('appreciation', v)} prefix="" suffix="%" />
+            <CurrencyInput label="Selling Costs (terminal)" hint="% of terminal value spent on exit broker commission, title, transfer tax. 3–5% typical." value={proj.sellingCostsPct} onChange={v => setProjK('sellingCostsPct', v)} prefix="" suffix="%" />
+          </div>
+        )}
 
         <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           Stress Test
@@ -516,6 +526,20 @@ ${notesSection}
             <CurrencyInput label="Vacancy Stress (% NOI)" hint="Percentage haircut applied to Year-1 NOI to simulate vacancy or rent loss." value={stress.vacancyPct} onChange={v => setStressK('vacancyPct', v)} prefix="" suffix="%" />
           </div>
         )}
+
+        <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          PDF Display Options
+        </div>
+        <div className={s.inputGrid}>
+          <div className={s.fieldGroup}>
+            <label className={s.label}>Closing Costs row</label>
+            <div className={styles.toggleRow}>
+              <button className={`${styles.toggleBtn} ${!showClosingCosts ? styles.toggleActive : ''}`} onClick={() => setShowClosingCosts(false)}>Hide</button>
+              <button className={`${styles.toggleBtn} ${showClosingCosts ? styles.toggleActive : ''}`} onClick={() => setShowClosingCosts(true)}>Show</button>
+            </div>
+          </div>
+          <div />
+        </div>
 
         <div className={s.sectionLabel}>1031 Tax Deferral (Optional)</div>
         <div className={s.inputGrid}>
@@ -638,11 +662,13 @@ ${notesSection}
                   </div>
                   <div className={styles.replRow}><span>DSCR</span><span>{r.dscr > 0 ? fmtMult(r.dscr) : '—'}</span></div>
                   <div className={styles.replRow}><span>Cash-on-Cash</span><span className={s.positive}>{fmtPct(r.cashReturn)}</span></div>
-                  <div className={styles.replRow} style={{ borderTop: '1px dashed var(--border)', paddingTop: 4, marginTop: 4 }}><span>Yr {proj.years} Value</span><span>{fmt$M(r.terminalValue)}</span></div>
-                  <div className={styles.replRow}><span>Cum. CF ({proj.years}y)</span><span>{fmt$M(r.cumCF)}</span></div>
-                  <div className={styles.replRow}><span>Total $ Returned</span><span className={s.positive}>{fmt$M(r.totalReturned)}</span></div>
-                  <div className={styles.replRow}><span>Equity Multiple</span><span className={s.positive}>{fmtMult(r.equityMultiple)}</span></div>
-                  <div className={styles.replRow}><span>CAGR</span><span className={s.positive}>{fmtPct(r.cagr)}</span></div>
+                  {showProjection && <>
+                    <div className={styles.replRow} style={{ borderTop: '1px dashed var(--border)', paddingTop: 4, marginTop: 4 }}><span>Yr {proj.years} Value</span><span>{fmt$M(r.terminalValue)}</span></div>
+                    <div className={styles.replRow}><span>Cum. CF ({proj.years}y)</span><span>{fmt$M(r.cumCF)}</span></div>
+                    <div className={styles.replRow}><span>Total $ Returned</span><span className={s.positive}>{fmt$M(r.totalReturned)}</span></div>
+                    <div className={styles.replRow}><span>Equity Multiple</span><span className={s.positive}>{fmtMult(r.equityMultiple)}</span></div>
+                    <div className={styles.replRow}><span>CAGR</span><span className={s.positive}>{fmtPct(r.cagr)}</span></div>
+                  </>}
                 </div>
 
                 <div className={styles.scenarioNotes}>
@@ -703,6 +729,8 @@ ${notesSection}
           proj={proj}
           stress={stress}
           activeGoal={activeGoal}
+          showProjection={showProjection}
+          showClosingCosts={showClosingCosts}
           onExport={handleExport}
           onClose={() => setPreviewOpen(false)}
         />
@@ -726,7 +754,7 @@ ${notesSection}
   )
 }
 
-function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, stress, activeGoal, onExport, onClose }) {
+function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, stress, activeGoal, showProjection, showClosingCosts, onExport, onClose }) {
   const recommendedIdx = activeGoal ? scenarios.findIndex(sc => sc.goalKey === activeGoal) : -1
   const recommendedScenario = recommendedIdx >= 0 ? scenarios[recommendedIdx] : null
   const goalLabel = activeGoal && GOALS[activeGoal] ? GOALS[activeGoal] : ''
@@ -773,7 +801,7 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     ['Annual Debt Service', fmt$(calc.sAnnDS)],
     ['Annual Cash Flow', fmt$(calc.sCF)],
     ['Cash-on-Cash', fmtPct(calc.sCoC)],
-    ['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)],
+    ...(showClosingCosts ? [['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)]] : []),
   ]
   const isCash = sc => sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
   const rowFns = [
@@ -882,23 +910,27 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             </tbody>
           </table>
 
-          <div style={p.section}>Wealth Projection ({proj.years} yrs)</div>
-          <table style={p.table}>
-            <thead>
-              <tr>
-                <th style={{ ...p.th, ...p.thFirst }}></th>
-                {scenarios.map((sc, i) => <th key={i} style={{ ...p.th, ...(i === recommendedIdx ? p.recTh : {}) }}>{i === recommendedIdx ? '★ ' : ''}{i + 1}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {projRows.map(([label, fn], ri) => (
-                <tr key={label} style={ri % 2 === 0 ? p.trAlt : {}}>
-                  <td style={{ ...p.td, ...p.tdFirst }}>{label}</td>
-                  {calc.results.map((r, i) => <td key={i} style={{ ...p.td, ...(i === recommendedIdx ? p.recTd : {}) }}>{fn(r, scenarios[i])}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {showProjection && (
+            <>
+              <div style={p.section}>Wealth Projection ({proj.years} yrs)</div>
+              <table style={p.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...p.th, ...p.thFirst }}></th>
+                    {scenarios.map((sc, i) => <th key={i} style={{ ...p.th, ...(i === recommendedIdx ? p.recTh : {}) }}>{i === recommendedIdx ? '★ ' : ''}{i + 1}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {projRows.map(([label, fn], ri) => (
+                    <tr key={label} style={ri % 2 === 0 ? p.trAlt : {}}>
+                      <td style={{ ...p.td, ...p.tdFirst }}>{label}</td>
+                      {calc.results.map((r, i) => <td key={i} style={{ ...p.td, ...(i === recommendedIdx ? p.recTd : {}) }}>{fn(r, scenarios[i])}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
 
           {refi.enabled && refiData && (
             <>

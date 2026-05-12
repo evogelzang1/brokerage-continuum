@@ -31,6 +31,7 @@ const EMPTY_REPL = { name: '', noi: 0, capRate: 6.5, leaseType: 'Absolute Net', 
 export default function ExchangeAnalysis() {
   const [replDebt, setReplDebt] = useState(true)
   const [previewOpen, setPreviewOpen] = useState(true)
+  const [showClosingCosts, setShowClosingCosts] = useState(true)
   const [sub, setSub] = useState({
     exitCap: 4.95, noi: 87120,
     titleEscrow: 10000, commissionPct: 4,
@@ -120,7 +121,7 @@ export default function ExchangeAnalysis() {
       ['Current Loan Balance', fmt$(sub.currLoanBal)],
       ['Annual Debt Service', fmt$(calc.sAnnDebt)], ['Cash Flow After Debt', fmt$(calc.sCF)],
       ['Return on Equity', fmtPct(calc.sROE)],
-      ['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)],
+      ...(showClosingCosts ? [['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)]] : []),
     ]
     const bootRow = ['Mortgage Boot (taxable)', o => o.boot > 0 ? fmt$(o.boot) : '—']
     const replMetrics = replDebt
@@ -228,6 +229,18 @@ ${calc.totalTaxBill > 0
           <div />
         </div>
 
+        <div className={s.sectionLabel}>PDF Display Options</div>
+        <div className={s.inputGrid}>
+          <div className={s.fieldGroup}>
+            <label className={s.label}>Closing Costs row</label>
+            <div className={styles.toggleRow}>
+              <button className={`${styles.toggleBtn} ${!showClosingCosts ? styles.toggleActive : ''}`} onClick={() => setShowClosingCosts(false)}>Hide</button>
+              <button className={`${styles.toggleBtn} ${showClosingCosts ? styles.toggleActive : ''}`} onClick={() => setShowClosingCosts(true)}>Show</button>
+            </div>
+          </div>
+          <div />
+        </div>
+
         <div className={s.sectionLabel}>1031 Tax Deferral (Optional)</div>
         <div className={s.inputGrid}>
           <CurrencyInput label="Est. Tax Liability if Sold (per CPA)" hint="Optional. Paste the seller's CPA estimate of federal + state tax owed on an outright sale. Displayed as 'Tax Deferred via 1031.' Leave blank to omit — depreciation method, state tax, NIIT, and prior 1031 carryover make this hard to derive accurately here." value={sub.estimatedTaxLiability} onChange={v => set('estimatedTaxLiability', v)} />
@@ -309,6 +322,7 @@ ${calc.totalTaxBill > 0
           repls={repls}
           replDebt={replDebt}
           replMetricsPreview={replMetricsPreview}
+          showClosingCosts={showClosingCosts}
           fmt$={fmt$}
           fmtPct={fmtPct}
           fmtDate={fmtDate}
@@ -336,7 +350,7 @@ ${calc.totalTaxBill > 0
 }
 
 // Print-matching preview for 1031 Exchange — inline styles mirror the exported HTML
-function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, replMetricsPreview, fmt$, fmtPct, fmtDate, onExport, onClose }) {
+function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, replMetricsPreview, showClosingCosts, fmt$, fmtPct, fmtDate, onExport, onClose }) {
   const p = {
     outer: { width: 460, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', position: 'sticky', top: 0, background: '#fff' },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg-hover)' },
@@ -376,7 +390,7 @@ function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, repl
     ['Annual Debt Service', fmt$(calc.sAnnDebt)],
     ['Cash Flow After Debt', fmt$(calc.sCF)],
     ['Return on Equity', fmtPct(calc.sROE)],
-    ['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)],
+    ...(showClosingCosts ? [['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)]] : []),
   ]
 
   return (
