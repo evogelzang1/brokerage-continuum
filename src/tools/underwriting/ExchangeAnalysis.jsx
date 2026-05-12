@@ -108,7 +108,7 @@ export default function ExchangeAnalysis() {
       salePrice, equity1031, brokerComm,
       totalTaxBill,
       sAnnDebt, sMonthDebt, sEquity, sCF, sROE,
-      id45, close180, options,
+      anchorDate, id45, close180, options,
     }
   }, [sub, repls, replDebt])
 
@@ -179,7 +179,7 @@ ${subRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><spa
 ${calc.totalTaxBill > 0
   ? `<div class="row hl"><span>Tax Deferred via 1031 (CPA estimate)</span><span>${fmt$(calc.totalTaxBill)}</span></div>`
   : `<div class="row"><span>Estimated Tax Deferred</span><span>Per seller's CPA</span></div>`}
-<div class="deadlines"><div><span>45-Day ID</span><span>${fmtDate(calc.id45)}</span></div><div><span>180-Day Close</span><span>${fmtDate(calc.close180)}</span></div></div>
+<div class="deadlines"><div><span>Relinquished Close</span><span>${fmtDate(calc.anchorDate)}</span></div><div><span>45-Day ID</span><span>${fmtDate(calc.id45)}</span></div><div><span>180-Day Close</span><span>${fmtDate(calc.close180)}</span></div></div>
 </div>
 </div>
 <div class="section">Replacement Properties ${replDebt ? '(With Debt)' : '(All Cash)'}</div>
@@ -426,6 +426,10 @@ function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, repl
                 </div>
               )}
               <div style={p.deadlines}>
+                <div style={p.deadlineBox}>
+                  <span style={p.deadlineLabel}>Relinquished Close</span>
+                  <span style={p.deadlineValue}>{fmtDate(calc.anchorDate)}</span>
+                </div>
                 <div style={p.deadlineBox}>
                   <span style={p.deadlineLabel}>45-Day ID</span>
                   <span style={p.deadlineValue}>{fmtDate(calc.id45)}</span>

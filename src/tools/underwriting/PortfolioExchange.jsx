@@ -276,7 +276,7 @@ export default function PortfolioExchange() {
       equity1031, brokerComm, currLoanBal,
       sAnnDS, sCF, sEquity, sCoC, sDSCR, currentCap,
       totalTaxBill,
-      id45, close180, results,
+      anchorDate, id45, close180, results,
     }
   }, [sub, scenarios, refi, stress, proj])
 
@@ -405,6 +405,7 @@ ${stressNote}
       ? `<div class="row hl"><span>Tax Deferred via 1031 (CPA estimate)</span><span>${fmt$(calc.totalTaxBill)}</span></div>`
       : `<div class="row"><span>Estimated Tax Deferred</span><span>Per seller's CPA</span></div>`}
     <div class="deadlines">
+      <div><span>Relinquished Close</span><span>${fmtDate(calc.anchorDate)}</span></div>
       <div><span>45-Day ID</span><span>${fmtDate(calc.id45)}</span></div>
       <div><span>180-Day Close</span><span>${fmtDate(calc.close180)}</span></div>
     </div>
@@ -822,6 +823,10 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
                 </div>
               )}
               <div style={p.deadlines}>
+                <div style={p.deadlineBox}>
+                  <span style={p.deadlineLabel}>Relinquished Close</span>
+                  <span style={p.deadlineValue}>{fmtDate(calc.anchorDate)}</span>
+                </div>
                 <div style={p.deadlineBox}>
                   <span style={p.deadlineLabel}>45-Day ID</span>
                   <span style={p.deadlineValue}>{fmtDate(calc.id45)}</span>
