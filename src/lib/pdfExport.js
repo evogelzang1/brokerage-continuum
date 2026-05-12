@@ -9,16 +9,31 @@ export function escapeHtml(str) {
 }
 
 export function openHtml(html) {
-  const w = window.open('', '_blank')
-  if (w) {
-    w.document.write(html)
-    w.document.close()
-    w.document.title = ' '
-    w.focus()
-    setTimeout(() => w.print(), 300)
-  } else {
-    alert('Popup blocked — please allow popups to export PDF.')
-  }
+  // Hidden-iframe pattern — no `window.open`, so no popup-blocker collision.
+  // The browser print dialog uses the iframe's document as the page.
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
+  document.body.appendChild(iframe)
+
+  const cleanup = () => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe) }
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document
+  doc.open()
+  doc.write(html)
+  doc.close()
+
+  // Small delay so fonts + colors apply before the print dialog snapshots the page.
+  setTimeout(() => {
+    try {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+    } catch (err) {
+      console.error('PDF export failed:', err)
+    }
+    // print() blocks in desktop browsers but is async on mobile/Tauri webview;
+    // 30s gives the dialog plenty of time to close before we tear down the iframe.
+    setTimeout(cleanup, 30_000)
+  }, 300)
 }
 
 export function exportToolPdf({ title, subtitle, inputs, outputs, footnotes }) {
