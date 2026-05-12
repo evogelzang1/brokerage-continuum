@@ -275,3 +275,176 @@
   color: var(--text-subtle);
   border-top: 1px solid var(--border);
 }
+
+/* Goal chips */
+.goalChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.goalChip {
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.goalChip:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.goalChipActive {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.goalChipActive:hover {
+  color: #fff;
+}
+
+/* Recommended badge on scenario card */
+.recommendedBadge {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.replCard {
+  position: relative;
+}
+
+/* Sub-properties inside a scenario card */
+.subProperties {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subPropertiesLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.addPropBtn {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.addPropBtn:hover {
+  background: rgba(68, 147, 248, 0.08);
+}
+
+.propRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.propName {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  outline: none;
+}
+
+.propName:focus {
+  border-color: var(--accent);
+}
+
+.propNum {
+  width: 44px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 4px;
+  outline: none;
+  text-align: right;
+}
+
+.propNum:focus {
+  border-color: var(--accent);
+}
+
+.propUnit {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 20px;
+}
+
+.propRemove {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.propRemove:hover {
+  color: var(--red);
+}
+
+.propWeighted {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 2px;
+}
+
+.propWeighted strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Scenario notes textarea */
+.scenarioNotes {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+  margin-top: 4px;
+}

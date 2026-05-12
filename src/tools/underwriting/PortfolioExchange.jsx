@@ -7,6 +7,7 @@ import styles from './exchange.module.css'
 const fmt$ = v => `$${Math.round(v).toLocaleString()}`
 const fmt$M = v => `$${(v / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 2 })}M`
 const fmtPct = v => `${(v * 100).toFixed(2)}%`
+const fmtMult = v => `${v.toFixed(2)}x`
 const fmtDate = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 function PMT(rate, nper, pv) {
@@ -27,55 +28,23 @@ function CUMPRINC(rate, nper, pv, start, end) {
   return -total
 }
 
-function buildScenario(equity1031, minReplacementValue, params, sCF, refi) {
-  const { capRate, ltv, rate, amort } = params
-  const cap = capRate / 100
-  const lev = ltv / 100
+function effectiveCap(properties) {
+  if (!properties || properties.length === 0) return 0
+  const totalAlloc = properties.reduce((s, p) => s + (p.allocation || 0), 0)
+  if (totalAlloc === 0) return 0
+  return properties.reduce((s, p) => s + (p.allocation || 0) * (p.capRate || 0), 0) / totalAlloc
+}
 
-  // 1031-safe sizing: replacement value must be ≥ relinquished sale price to
-  // fully defer tax. Equity-implied size = equity / (1 - LTV); we floor that
-  // at the sale-price minimum. Any shortfall has to be funded with cash from
-  // outside the exchange.
-  const equityImpliedPrice = lev < 1 ? equity1031 / (1 - lev) : equity1031
-  const price = Math.max(equityImpliedPrice, minReplacementValue)
-  const loanAmt = price * lev
-  const downPayment = price - loanAmt
-  const additionalCashNeeded = Math.max(0, downPayment - equity1031)
-  const totalCashInvested = equity1031 + additionalCashNeeded
-  const newNOI = price * cap
-  const mRate = rate / 100 / 12
-  const annDS = loanAmt > 0 ? -PMT(mRate, amort * 12, loanAmt) * 12 : 0
-  const princRedux = loanAmt > 0 ? -CUMPRINC(mRate, amort * 12, loanAmt, 1, 12) : 0
-  const netCF = newNOI - annDS
-  const cashReturn = totalCashInvested > 0 ? netCF / totalCashInvested : 0
-  const totalReturn = totalCashInvested > 0 ? (netCF + princRedux) / totalCashInvested : 0
-  const dscr = annDS > 0 ? newNOI / annDS : 0
-  const debtYield = loanAmt > 0 ? newNOI / loanAmt : 0
-  const cfDelta = netCF - sCF
-
-  // Optional cash-out refi after an all-cash acquisition.
-  let refiOut = null
-  if (refi && refi.enabled) {
-    const refiLev = refi.ltv / 100
-    const refiRate = refi.rate / 100 / 12
-    const refiLoan = price * refiLev
-    const refiAnnDS = refiLoan > 0 ? -PMT(refiRate, refi.amort * 12, refiLoan) * 12 : 0
-    const refiPrincRedux = refiLoan > 0 ? -CUMPRINC(refiRate, refi.amort * 12, refiLoan, 1, 12) : 0
-    const cashExtracted = refiLoan
-    const cfPostRefi = newNOI - refiAnnDS
-    const remainingEquity = Math.max(0, price - refiLoan)
-    const cocPostRefi = remainingEquity > 0 ? cfPostRefi / remainingEquity : 0
-    const totalReturnPostRefi = remainingEquity > 0 ? (cfPostRefi + refiPrincRedux) / remainingEquity : 0
-    const refiDSCR = refiAnnDS > 0 ? newNOI / refiAnnDS : 0
-    refiOut = { refiLoan, refiAnnDS, refiPrincRedux, cashExtracted, cfPostRefi, remainingEquity, cocPostRefi, totalReturnPostRefi, refiDSCR }
-  }
-
-  return { price, loanAmt, ltv: lev, newNOI, capRate: cap, annDS, princRedux, netCF, cashReturn, totalReturn, dscr, debtYield, cfDelta, additionalCashNeeded, totalCashInvested, refi: refiOut }
+const GOALS = {
+  maxCF: 'More cash flow',
+  preserveCF: 'Same CF, lower risk',
+  freeAndClear: 'No leverage',
+  cashOut: 'Extract tax-free cash',
 }
 
 const DEFAULT_SUB = {
   salePrice: 29_000_000,
-  noi: 1_450_000,          // 5% current cap on $29M
+  noi: 1_450_000,
   hasDebt: true,
   currLoanBal: 10_000_000,
   intRate: 5,
@@ -85,31 +54,172 @@ const DEFAULT_SUB = {
   estimatedTaxLiability: 0,
 }
 
+const DEFAULT_PROJ = {
+  years: 10,
+  appreciation: 3.0,        // annual %, applied to value + NOI
+  sellingCostsPct: 4.0,     // % of terminal value (exit broker fee + closing)
+}
+
+const DEFAULT_STRESS = {
+  enabled: false,
+  rateBps: 100,             // +bps applied to acquisition + refi loan rates
+  vacancyPct: 5,            // % NOI reduction
+}
+
 const DEFAULT_SCENARIOS = [
-  { name: 'Maximize Cash Flow', capRate: 6.75, ltv: 50, rate: 6.5, amort: 30, mode: 'leveraged' },
-  { name: 'Preserve CF, Reduce Risk', capRate: 5.75, ltv: 30, rate: 6.5, amort: 30, mode: 'leveraged' },
-  { name: 'Free & Clear (No Refi)', capRate: 5.50, ltv: 0, rate: 0, amort: 30, mode: 'cashOnly' },
-  { name: 'Free & Clear + Cash-Out Refi', capRate: 5.50, ltv: 0, rate: 0, amort: 30, mode: 'cashRefi' },
+  {
+    name: 'Maximize Cash Flow',
+    ltv: 50, rate: 6.5, amort: 30, mode: 'leveraged', recourse: true,
+    goalKey: 'maxCF', notes: '',
+    properties: [{ name: 'Property 1', allocation: 100, capRate: 6.75 }],
+  },
+  {
+    name: 'Preserve CF, Reduce Risk',
+    ltv: 30, rate: 6.5, amort: 30, mode: 'leveraged', recourse: false,
+    goalKey: 'preserveCF', notes: '',
+    properties: [{ name: 'Property 1', allocation: 100, capRate: 5.75 }],
+  },
+  {
+    name: 'Free & Clear (No Refi)',
+    ltv: 0, rate: 0, amort: 30, mode: 'cashOnly', recourse: false,
+    goalKey: 'freeAndClear', notes: '',
+    properties: [{ name: 'Property 1', allocation: 100, capRate: 5.50 }],
+  },
+  {
+    name: 'Free & Clear + Cash-Out Refi',
+    ltv: 0, rate: 0, amort: 30, mode: 'cashRefi', recourse: true,
+    goalKey: 'cashOut', notes: '',
+    properties: [{ name: 'Property 1', allocation: 100, capRate: 5.50 }],
+  },
 ]
 
 const DEFAULT_REFI = { enabled: true, ltv: 50, rate: 6.5, amort: 30 }
+
+function buildScenario(equity1031, minReplacementValue, params, sCF, refi, stress, proj) {
+  const { ltv, rate, amort, properties } = params
+  const lev = ltv / 100
+  const cap = effectiveCap(properties) / 100
+
+  // Apply stress to acquisition rate
+  const acqRate = stress.enabled ? rate + stress.rateBps / 100 : rate
+  const vacancyFactor = stress.enabled ? 1 - stress.vacancyPct / 100 : 1
+
+  // 1031-safe sizing: ≥ relinquished sale price
+  const equityImpliedPrice = lev < 1 ? equity1031 / (1 - lev) : equity1031
+  const price = Math.max(equityImpliedPrice, minReplacementValue)
+  const loanAmt = price * lev
+  const downPayment = price - loanAmt
+  const additionalCashNeeded = Math.max(0, downPayment - equity1031)
+  const totalCashInvested = equity1031 + additionalCashNeeded
+
+  const grossNOI = price * cap
+  const newNOI = grossNOI * vacancyFactor
+  const mRate = acqRate / 100 / 12
+  const annDS = loanAmt > 0 ? -PMT(mRate, amort * 12, loanAmt) * 12 : 0
+  const princRedux = loanAmt > 0 ? -CUMPRINC(mRate, amort * 12, loanAmt, 1, 12) : 0
+  const netCF = newNOI - annDS
+  const cashReturn = totalCashInvested > 0 ? netCF / totalCashInvested : 0
+  const totalReturn = totalCashInvested > 0 ? (netCF + princRedux) / totalCashInvested : 0
+  const dscr = annDS > 0 ? newNOI / annDS : 0
+  const debtYield = loanAmt > 0 ? newNOI / loanAmt : 0
+  const cfDelta = netCF - sCF
+
+  // Refi (Scenario 4) — assume executes at t=0 for projection simplicity
+  let refiOut = null
+  let projectionLoanAmt = loanAmt
+  let projectionDS = annDS
+  let projectionRate = mRate
+  let projectionAmort = amort
+  let cashExtractedAtRefi = 0
+  if (refi && refi.enabled) {
+    const refiLev = refi.ltv / 100
+    const refiInterestRate = stress.enabled ? refi.rate + stress.rateBps / 100 : refi.rate
+    const refiMRate = refiInterestRate / 100 / 12
+    const refiLoan = price * refiLev
+    const refiAnnDS = refiLoan > 0 ? -PMT(refiMRate, refi.amort * 12, refiLoan) * 12 : 0
+    const refiPrincRedux = refiLoan > 0 ? -CUMPRINC(refiMRate, refi.amort * 12, refiLoan, 1, 12) : 0
+    const cashExtracted = refiLoan
+    const cfPostRefi = newNOI - refiAnnDS
+    const remainingEquity = Math.max(0, price - refiLoan)
+    const cocPostRefi = remainingEquity > 0 ? cfPostRefi / remainingEquity : 0
+    const totalReturnPostRefi = remainingEquity > 0 ? (cfPostRefi + refiPrincRedux) / remainingEquity : 0
+    const refiDSCR = refiAnnDS > 0 ? newNOI / refiAnnDS : 0
+    refiOut = { refiLoan, refiAnnDS, refiPrincRedux, cashExtracted, cfPostRefi, remainingEquity, cocPostRefi, totalReturnPostRefi, refiDSCR }
+    // Projection uses refi terms from t=0
+    projectionLoanAmt = refiLoan
+    projectionDS = refiAnnDS
+    projectionRate = refiMRate
+    projectionAmort = refi.amort
+    cashExtractedAtRefi = cashExtracted
+  }
+
+  // Hold-period projection
+  const apprRate = (proj.appreciation || 0) / 100
+  const years = Math.max(0, Math.floor(proj.years || 0))
+  let cumCF = 0
+  for (let y = 1; y <= years; y++) {
+    const yrNOI = newNOI * Math.pow(1 + apprRate, y - 1)
+    const yrCF = yrNOI - projectionDS
+    cumCF += yrCF
+  }
+  const cumPaydown = (years > 0 && projectionLoanAmt > 0)
+    ? -CUMPRINC(projectionRate, projectionAmort * 12, projectionLoanAmt, 1, years * 12)
+    : 0
+  const remLoan = Math.max(0, projectionLoanAmt - cumPaydown)
+  const terminalValue = price * Math.pow(1 + apprRate, years)
+  const sellingCosts = terminalValue * (proj.sellingCostsPct / 100)
+  const netSaleProceeds = Math.max(0, terminalValue - remLoan - sellingCosts)
+  const totalReturned = cashExtractedAtRefi + cumCF + netSaleProceeds
+  const equityMultiple = totalCashInvested > 0 ? totalReturned / totalCashInvested : 0
+  const cagr = (totalCashInvested > 0 && totalReturned > 0 && years > 0)
+    ? Math.pow(totalReturned / totalCashInvested, 1 / years) - 1
+    : 0
+
+  return {
+    price, loanAmt, ltv: lev, newNOI, capRate: cap, annDS, princRedux,
+    netCF, cashReturn, totalReturn, dscr, debtYield, cfDelta,
+    additionalCashNeeded, totalCashInvested, refi: refiOut,
+    terminalValue, cumCF, cumPaydown, remLoan, sellingCosts, netSaleProceeds,
+    totalReturned, equityMultiple, cagr, cashExtractedAtRefi,
+  }
+}
 
 export default function PortfolioExchange() {
   const [clientName, setClientName] = useState('Client')
   const [sub, setSub] = useState(DEFAULT_SUB)
   const [scenarios, setScenarios] = useState(DEFAULT_SCENARIOS)
   const [refi, setRefi] = useState(DEFAULT_REFI)
+  const [proj, setProj] = useState(DEFAULT_PROJ)
+  const [stress, setStress] = useState(DEFAULT_STRESS)
+  const [activeGoal, setActiveGoal] = useState(null)
 
   const set = (k, v) => setSub(p => ({ ...p, [k]: v }))
   const setSc = (i, k, v) => setScenarios(p => p.map((sc, j) => j === i ? { ...sc, [k]: v } : sc))
   const setRefiK = (k, v) => setRefi(p => ({ ...p, [k]: v }))
+  const setProjK = (k, v) => setProj(p => ({ ...p, [k]: v }))
+  const setStressK = (k, v) => setStress(p => ({ ...p, [k]: v }))
+
+  const setProp = (scIdx, pIdx, k, v) => setScenarios(p => p.map((sc, j) =>
+    j === scIdx
+      ? { ...sc, properties: sc.properties.map((prop, pj) => pj === pIdx ? { ...prop, [k]: v } : prop) }
+      : sc
+  ))
+  const addProp = scIdx => setScenarios(p => p.map((sc, j) => {
+    if (j !== scIdx) return sc
+    const next = sc.properties.length + 1
+    return { ...sc, properties: [...sc.properties, { name: `Property ${next}`, allocation: 0, capRate: sc.properties[0]?.capRate || 6 }] }
+  }))
+  const removeProp = (scIdx, pIdx) => setScenarios(p => p.map((sc, j) =>
+    j === scIdx && sc.properties.length > 1
+      ? { ...sc, properties: sc.properties.filter((_, pj) => pj !== pIdx) }
+      : sc
+  ))
 
   const calc = useMemo(() => {
     const currLoanBal = sub.hasDebt ? sub.currLoanBal : 0
     const brokerComm = sub.salePrice * (sub.commissionPct / 100)
     const equity1031 = Math.max(0, sub.salePrice - currLoanBal - sub.titleEscrow - brokerComm)
 
-    // Current portfolio metrics
     const sMRate = sub.intRate / 100 / 12
     const sAnnDS = currLoanBal > 0 ? -PMT(sMRate, sub.amort * 12, currLoanBal) * 12 : 0
     const sCF = sub.noi - sAnnDS
@@ -118,12 +228,8 @@ export default function PortfolioExchange() {
     const sDSCR = sAnnDS > 0 ? sub.noi / sAnnDS : 0
     const currentCap = sub.salePrice > 0 ? sub.noi / sub.salePrice : 0
 
-    // Tax deferral — optional CPA estimate. Portfolio-level basis aggregation
-    // is too rough to derive credibly from first principles, so we defer to
-    // whatever number the seller's CPA produces.
     const totalTaxBill = Math.max(0, sub.estimatedTaxLiability)
 
-    // 1031 timing
     const today = new Date()
     const id45 = new Date(today.getTime() + 45 * 86400000)
     const close180 = new Date(today.getTime() + 180 * 86400000)
@@ -132,7 +238,7 @@ export default function PortfolioExchange() {
       const isCashAcq = sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
       const params = isCashAcq ? { ...sc, ltv: 0 } : sc
       const refiCfg = sc.mode === 'cashRefi' ? refi : null
-      return buildScenario(equity1031, sub.salePrice, params, sCF, refiCfg)
+      return buildScenario(equity1031, sub.salePrice, params, sCF, refiCfg, stress, proj)
     })
 
     return {
@@ -141,11 +247,13 @@ export default function PortfolioExchange() {
       totalTaxBill,
       id45, close180, results,
     }
-  }, [sub, scenarios, refi])
+  }, [sub, scenarios, refi, stress, proj])
+
+  const refiIdx = scenarios.findIndex(sc => sc.mode === 'cashRefi')
+  const refiResult = refiIdx >= 0 ? calc.results[refiIdx]?.refi : null
 
   const handleExport = () => {
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-
     const subRows = [
       ['Sale Price', fmt$(sub.salePrice)],
       ['Current NOI', fmt$(sub.noi)],
@@ -160,9 +268,10 @@ export default function PortfolioExchange() {
 
     const isCashMode = sc => sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
     const rowFns = [
-      ['Target Cap Rate', r => fmtPct(r.capRate)],
+      ['Effective Cap Rate', r => fmtPct(r.capRate)],
       ['Acquisition LTV', (r, sc) => isCashMode(sc) ? 'All Cash' : fmtPct(r.ltv)],
       ['Loan Rate', (r, sc) => isCashMode(sc) ? '—' : `${sc.rate.toFixed(2)}%`],
+      ['Recourse', (r, sc) => isCashMode(sc) ? '—' : (sc.recourse ? 'Recourse' : 'Non-Recourse')],
       ['Portfolio Size', r => fmt$(r.price)],
       ['Acquisition Debt', r => fmt$(r.loanAmt)],
       ['1031 Equity Used', () => fmt$(calc.equity1031)],
@@ -172,42 +281,61 @@ export default function PortfolioExchange() {
       ['Annual Debt Service', r => fmt$(r.annDS)],
       ['Net Cash Flow', r => fmt$(r.netCF)],
       ['CF vs Current', r => `${r.cfDelta >= 0 ? '+' : ''}${fmt$(r.cfDelta)}`],
-      ['DSCR', r => r.dscr > 0 ? `${r.dscr.toFixed(2)}x` : '—'],
+      ['DSCR', r => r.dscr > 0 ? fmtMult(r.dscr) : '—'],
       ['Debt Yield', r => r.debtYield > 0 ? fmtPct(r.debtYield) : '—'],
       ['Cash-on-Cash', r => fmtPct(r.cashReturn)],
-      ['Total Return (incl. paydown)', r => fmtPct(r.totalReturn)],
+      ['Total Return (incl. Yr-1 paydown)', r => fmtPct(r.totalReturn)],
     ]
 
-    const refiIdx = scenarios.findIndex(sc => sc.mode === 'cashRefi')
-    const refiData = refiIdx >= 0 ? calc.results[refiIdx]?.refi : null
-    const refiScenarioName = refiIdx >= 0 ? scenarios[refiIdx].name : ''
+    const projRowFns = [
+      [`Terminal Value (Yr ${proj.years})`, r => fmt$(r.terminalValue)],
+      [`Cumulative Cash Flow (${proj.years} yrs)`, r => fmt$(r.cumCF)],
+      [`Principal Paydown (${proj.years} yrs)`, r => fmt$(r.cumPaydown)],
+      ['Remaining Loan Balance', r => fmt$(r.remLoan)],
+      [`Selling Costs (${proj.sellingCostsPct}%)`, r => fmt$(r.sellingCosts)],
+      ['Net Sale Proceeds', r => fmt$(r.netSaleProceeds)],
+      ['Cash Extracted (Refi)', r => r.cashExtractedAtRefi > 0 ? fmt$(r.cashExtractedAtRefi) : '—'],
+      ['Total $ Returned', r => fmt$(r.totalReturned)],
+      ['Equity Multiple', r => fmtMult(r.equityMultiple)],
+      ['Annualized Return (CAGR)', r => fmtPct(r.cagr)],
+    ]
 
-    const refiSection = (refi.enabled && refiData) ? `
+    const refiScenarioName = refiIdx >= 0 ? scenarios[refiIdx].name : ''
+    const refiSection = (refi.enabled && refiResult) ? `
 <div class="section">${refiScenarioName} — Cash-Out Refinance (Year 2+)</div>
 <table>
   <thead><tr><th></th><th>Post-Refi Position</th></tr></thead>
   <tbody>
     <tr class="alt"><td>Refi LTV / Rate</td><td>${refi.ltv}% @ ${refi.rate.toFixed(2)}%</td></tr>
-    <tr><td>Refi Loan Amount</td><td>${fmt$(refiData.refiLoan)}</td></tr>
-    <tr class="alt"><td>Cash Extracted (tax-free)</td><td>${fmt$(refiData.cashExtracted)}</td></tr>
-    <tr><td>Refi Debt Service</td><td>${fmt$(refiData.refiAnnDS)}</td></tr>
-    <tr class="alt"><td>Net CF Post-Refi</td><td>${fmt$(refiData.cfPostRefi)}</td></tr>
-    <tr><td>Remaining Equity (in Property)</td><td>${fmt$(refiData.remainingEquity)}</td></tr>
-    <tr class="alt"><td>CoC on Remaining Equity</td><td>${fmtPct(refiData.cocPostRefi)}</td></tr>
-    <tr><td>DSCR (Refi)</td><td>${refiData.refiDSCR.toFixed(2)}x</td></tr>
+    <tr><td>Refi Loan Amount</td><td>${fmt$(refiResult.refiLoan)}</td></tr>
+    <tr class="alt"><td>Cash Extracted (tax-free)</td><td>${fmt$(refiResult.cashExtracted)}</td></tr>
+    <tr><td>Refi Debt Service</td><td>${fmt$(refiResult.refiAnnDS)}</td></tr>
+    <tr class="alt"><td>Net CF Post-Refi</td><td>${fmt$(refiResult.cfPostRefi)}</td></tr>
+    <tr><td>Remaining Equity (in Property)</td><td>${fmt$(refiResult.remainingEquity)}</td></tr>
+    <tr class="alt"><td>CoC on Remaining Equity</td><td>${fmtPct(refiResult.cocPostRefi)}</td></tr>
+    <tr><td>DSCR (Refi)</td><td>${fmtMult(refiResult.refiDSCR)}</td></tr>
   </tbody>
 </table>` : ''
+
+    const notesSection = scenarios.some(sc => sc.notes && sc.notes.trim()) ? `
+<div class="section">Notes</div>
+${scenarios.map((sc, i) => sc.notes && sc.notes.trim() ? `<div class="noteBlock"><strong>${i + 1}. ${sc.name}:</strong> ${sc.notes}</div>` : '').join('')}` : ''
+
+    const stressNote = stress.enabled
+      ? `<div class="stressNote">Stress applied: +${stress.rateBps} bps on all loan rates, −${stress.vacancyPct}% NOI</div>`
+      : ''
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title> </title>
 <style>
 @page{size:letter landscape;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0;padding:0}
-body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:9px;padding:.3in}
+body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:8.5px;padding:.3in}
 .banner{background:#101828;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:4px}
 .banner h1{font-size:12px;margin:0;font-weight:700}
 .banner span{font-size:7.5px;opacity:.7}
 .meta{font-size:8.5px;color:#6e7378;margin-bottom:6px}
+.stressNote{font-size:8px;color:#9a6700;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:3px 8px;margin-bottom:6px;font-weight:600}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .section{font-size:8px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:3px 0 1px;margin:6px 0 2px}
 .row{display:flex;justify-content:space-between;padding:1px 3px;font-size:8.5px;line-height:1.25}
@@ -219,18 +347,18 @@ body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;
 .deadlines>div{flex:1;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:3px 5px;text-align:center}
 .deadlines span:first-child{color:#6e7378;font-weight:600;display:block;font-size:7.5px}
 .deadlines span:last-child{color:#9a6700;font-weight:700;font-size:9px}
-table{width:100%;border-collapse:collapse;font-size:8.5px;margin-top:3px}
-th{text-align:right;padding:3px 5px;font-weight:700;border-bottom:1px solid #d0d7de;background:#f5f7fa}
+table{width:100%;border-collapse:collapse;font-size:8px;margin-top:3px}
+th{text-align:right;padding:2px 4px;font-weight:700;border-bottom:1px solid #d0d7de;background:#f5f7fa}
 th:first-child{text-align:left}
-td{text-align:right;padding:3px 5px}
+td{text-align:right;padding:2px 4px}
 td:first-child{text-align:left;color:#6e7378;font-weight:500}
 tr.alt{background:#fafbfc}
-.scenarioNote{font-size:8px;color:#6e7378;font-style:italic;margin-top:2px}
+.noteBlock{font-size:8px;padding:3px 4px;margin-top:2px;color:#1a1a1a}
 .footer{margin-top:6px;font-size:7px;color:#999;border-top:1px solid #d0d7de;padding-top:3px;text-align:center}
 </style></head><body>
 <div class="banner"><h1>PORTFOLIO 1031 EXCHANGE — STRATEGY COMPARISON</h1><span>Matthews Real Estate Investment Services</span></div>
 <div class="meta">Prepared for: ${clientName} &mdash; ${dateStr}</div>
-
+${stressNote}
 <div class="grid">
   <div>
     <div class="section">Relinquished Portfolio</div>
@@ -246,32 +374,35 @@ tr.alt{background:#fafbfc}
       <div><span>45-Day ID</span><span>${fmtDate(calc.id45)}</span></div>
       <div><span>180-Day Close</span><span>${fmtDate(calc.close180)}</span></div>
     </div>
+    <div class="row"><span>Hold Period (assumed)</span><span>${proj.years} years</span></div>
+    <div class="row alt"><span>Appreciation Rate (assumed)</span><span>${proj.appreciation.toFixed(2)}%/yr</span></div>
   </div>
 </div>
 
-<div class="section">Replacement Portfolio — Three Strategies</div>
+<div class="section">Replacement Portfolio — Year 1</div>
 <table>
-  <thead>
-    <tr>
-      <th></th>
-      ${scenarios.map((sc, i) => `<th>${i + 1}. ${sc.name}</th>`).join('')}
-    </tr>
-  </thead>
+  <thead><tr><th></th>${scenarios.map((sc, i) => `<th>${i + 1}. ${sc.name}</th>`).join('')}</tr></thead>
   <tbody>
     ${rowFns.map(([label, fn], ri) => `<tr class="${ri % 2 === 0 ? 'alt' : ''}"><td>${label}</td>${calc.results.map((r, i) => `<td>${fn(r, scenarios[i])}</td>`).join('')}</tr>`).join('')}
   </tbody>
 </table>
 
-${refiSection}
+<div class="section">Hold-Period Projection (${proj.years} yrs @ ${proj.appreciation.toFixed(2)}%/yr appreciation)</div>
+<table>
+  <thead><tr><th></th>${scenarios.map((sc, i) => `<th>${i + 1}. ${sc.name}</th>`).join('')}</tr></thead>
+  <tbody>
+    ${projRowFns.map(([label, fn], ri) => `<tr class="${ri % 2 === 0 ? 'alt' : ''}"><td>${label}</td>${calc.results.map((r, i) => `<td>${fn(r, scenarios[i])}</td>`).join('')}</tr>`).join('')}
+  </tbody>
+</table>
 
-<div class="footer">Returns shown are Year-1 estimates on the new portfolio. Cash-out refi proceeds are tax-free loan proceeds, not income. For analysis purposes only — consult a qualified tax/legal professional. &mdash; Matthews REIS</div>
+${refiSection}
+${notesSection}
+
+<div class="footer">Year-1 estimates + ${proj.years}-yr projection assume ${proj.appreciation.toFixed(2)}% annual appreciation on value &amp; NOI, ${proj.sellingCostsPct}% selling costs. Cash-out refi proceeds are tax-free loan proceeds, not income. For analysis purposes only — consult a qualified tax/legal professional. &mdash; Matthews REIS</div>
 </body></html>`
 
     openHtml(html)
   }
-
-  const refiIdx = scenarios.findIndex(sc => sc.mode === 'cashRefi')
-  const refiResult = refiIdx >= 0 ? calc.results[refiIdx]?.refi : null
 
   return (
     <div className={styles.splitLayout}>
@@ -281,7 +412,18 @@ ${refiSection}
             <label className={s.label}>Prepared For</label>
             <input className={s.input} value={clientName} onChange={e => setClientName(e.target.value)} />
           </div>
-          <div />
+          <div className={s.fieldGroup}>
+            <label className={s.label}>Recommend a strategy</label>
+            <div className={styles.goalChips}>
+              {Object.entries(GOALS).map(([key, label]) => (
+                <button
+                  key={key}
+                  className={`${styles.goalChip} ${activeGoal === key ? styles.goalChipActive : ''}`}
+                  onClick={() => setActiveGoal(activeGoal === key ? null : key)}
+                >{label}</button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className={s.sectionLabel}>Relinquished Portfolio</div>
@@ -304,6 +446,27 @@ ${refiSection}
             <CurrencyInput label="Current Loan Balance" hint="Aggregate outstanding debt across the portfolio — deducted from sale proceeds." value={sub.currLoanBal} onChange={v => set('currLoanBal', v)} />
             <CurrencyInput label="Interest Rate" hint="Blended rate on existing debt (used for current debt-service)." value={sub.intRate} onChange={v => set('intRate', v)} prefix="" suffix="%" />
             <CurrencyInput label="Amortization (yrs)" hint="Blended amort schedule for the existing portfolio debt." value={sub.amort} onChange={v => set('amort', v)} prefix="" />
+          </div>
+        )}
+
+        <div className={s.sectionLabel}>Hold-Period Projection</div>
+        <div className={s.inputGrid}>
+          <CurrencyInput label="Hold Period (yrs)" hint="Years to model the wealth-comparison projection (terminal value, cumulative CF, equity multiple, CAGR)." value={proj.years} onChange={v => setProjK('years', v)} prefix="" />
+          <CurrencyInput label="Appreciation (annual)" hint="Annual value + NOI growth rate applied to all scenarios. 2–4% is a reasonable national average; adjust for market." value={proj.appreciation} onChange={v => setProjK('appreciation', v)} prefix="" suffix="%" />
+          <CurrencyInput label="Selling Costs (terminal)" hint="% of terminal value spent on exit broker commission, title, transfer tax. 3–5% typical." value={proj.sellingCostsPct} onChange={v => setProjK('sellingCostsPct', v)} prefix="" suffix="%" />
+        </div>
+
+        <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          Stress Test
+          <div className={styles.toggleRow}>
+            <button className={`${styles.toggleBtn} ${!stress.enabled ? styles.toggleActive : ''}`} onClick={() => setStressK('enabled', false)}>Off</button>
+            <button className={`${styles.toggleBtn} ${stress.enabled ? styles.toggleActive : ''}`} onClick={() => setStressK('enabled', true)}>Apply</button>
+          </div>
+        </div>
+        {stress.enabled && (
+          <div className={s.inputGrid}>
+            <CurrencyInput label="Rate Stress (bps)" hint="Basis points added to acquisition and refi loan rates. 100 bps = 1% rate hike." value={stress.rateBps} onChange={v => setStressK('rateBps', v)} prefix="" />
+            <CurrencyInput label="Vacancy Stress (% NOI)" hint="Percentage haircut applied to Year-1 NOI to simulate vacancy or rent loss." value={stress.vacancyPct} onChange={v => setStressK('vacancyPct', v)} prefix="" suffix="%" />
           </div>
         )}
 
@@ -331,15 +494,29 @@ ${refiSection}
             const r = calc.results[i]
             const isRefi = sc.mode === 'cashRefi'
             const isCashAcq = sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
+            const recommended = activeGoal && sc.goalKey === activeGoal
             return (
-              <div key={i} className={styles.replCard}>
+              <div
+                key={i}
+                className={styles.replCard}
+                style={recommended ? { borderColor: 'var(--accent)', boxShadow: '0 0 0 1px var(--accent)' } : {}}
+              >
+                {recommended && (
+                  <div className={styles.recommendedBadge}>Recommended</div>
+                )}
                 <input className={styles.replName} value={sc.name} onChange={e => setSc(i, 'name', e.target.value)} placeholder={`Scenario ${i + 1}`} />
                 <div className={styles.replInputs}>
-                  <CurrencyInput label="Target Cap Rate" hint="Weighted-average acquisition cap rate on the replacement portfolio." value={sc.capRate} onChange={v => setSc(i, 'capRate', v)} prefix="" suffix="%" />
                   {!isCashAcq && <>
                     <CurrencyInput label="Acquisition LTV" hint="Debt as % of new portfolio purchase price." value={sc.ltv} onChange={v => setSc(i, 'ltv', v)} prefix="" suffix="%" />
                     <CurrencyInput label="Loan Rate" hint="Blended rate on acquisition debt." value={sc.rate} onChange={v => setSc(i, 'rate', v)} prefix="" suffix="%" />
                     <CurrencyInput label="Amortization" hint="Amort period (yrs). 25–30 typical." value={sc.amort} onChange={v => setSc(i, 'amort', v)} prefix="" />
+                    <div className={s.fieldGroup}>
+                      <label className={s.label}>Loan Type</label>
+                      <div className={styles.toggleRow}>
+                        <button className={`${styles.toggleBtn} ${!sc.recourse ? styles.toggleActive : ''}`} onClick={() => setSc(i, 'recourse', false)}>Non-Recourse</button>
+                        <button className={`${styles.toggleBtn} ${sc.recourse ? styles.toggleActive : ''}`} onClick={() => setSc(i, 'recourse', true)}>Recourse</button>
+                      </div>
+                    </div>
                   </>}
                   {isCashAcq && (
                     <div className={s.hint} style={{ marginTop: -2 }}>
@@ -349,6 +526,46 @@ ${refiSection}
                     </div>
                   )}
                 </div>
+
+                <div className={styles.subProperties}>
+                  <div className={styles.subPropertiesLabel}>
+                    <span>Replacement Properties</span>
+                    <button className={styles.addPropBtn} onClick={() => addProp(i)}>+ Add</button>
+                  </div>
+                  {sc.properties.map((prop, pi) => (
+                    <div key={pi} className={styles.propRow}>
+                      <input
+                        className={styles.propName}
+                        value={prop.name}
+                        onChange={e => setProp(i, pi, 'name', e.target.value)}
+                        placeholder={`Property ${pi + 1}`}
+                      />
+                      <input
+                        className={styles.propNum}
+                        type="text"
+                        inputMode="decimal"
+                        value={prop.allocation}
+                        onChange={e => setProp(i, pi, 'allocation', parseFloat(e.target.value.replace(/[^0-9.]/g, '')) || 0)}
+                        title="Allocation %"
+                      />
+                      <span className={styles.propUnit}>%</span>
+                      <input
+                        className={styles.propNum}
+                        type="text"
+                        inputMode="decimal"
+                        value={prop.capRate}
+                        onChange={e => setProp(i, pi, 'capRate', parseFloat(e.target.value.replace(/[^0-9.]/g, '')) || 0)}
+                        title="Cap rate %"
+                      />
+                      <span className={styles.propUnit}>cap</span>
+                      {sc.properties.length > 1 && (
+                        <button className={styles.propRemove} onClick={() => removeProp(i, pi)} title="Remove">×</button>
+                      )}
+                    </div>
+                  ))}
+                  <div className={styles.propWeighted}>Weighted Cap: <strong>{fmtPct(r.capRate)}</strong></div>
+                </div>
+
                 <div className={styles.replResults}>
                   <div className={styles.replRow}><span>Portfolio Size</span><span>{fmt$M(r.price)}</span></div>
                   <div className={styles.replRow}><span>Acquisition Debt</span><span>{isCashAcq ? '—' : fmt$M(r.loanAmt)}</span></div>
@@ -362,9 +579,23 @@ ${refiSection}
                   <div className={`${styles.replRow} ${r.cfDelta >= 0 ? s.positive : s.negative}`}>
                     <span>CF vs Current</span><span>{r.cfDelta >= 0 ? '+' : ''}{fmt$(r.cfDelta)}</span>
                   </div>
-                  <div className={styles.replRow}><span>DSCR</span><span>{r.dscr > 0 ? `${r.dscr.toFixed(2)}x` : '—'}</span></div>
+                  <div className={styles.replRow}><span>DSCR</span><span>{r.dscr > 0 ? fmtMult(r.dscr) : '—'}</span></div>
                   <div className={styles.replRow}><span>Cash-on-Cash</span><span className={s.positive}>{fmtPct(r.cashReturn)}</span></div>
-                  <div className={styles.replRow}><span>Total Return</span><span className={s.positive}>{fmtPct(r.totalReturn)}</span></div>
+                  <div className={styles.replRow} style={{ borderTop: '1px dashed var(--border)', paddingTop: 4, marginTop: 4 }}><span>Yr {proj.years} Value</span><span>{fmt$M(r.terminalValue)}</span></div>
+                  <div className={styles.replRow}><span>Cum. CF ({proj.years}y)</span><span>{fmt$M(r.cumCF)}</span></div>
+                  <div className={styles.replRow}><span>Total $ Returned</span><span className={s.positive}>{fmt$M(r.totalReturned)}</span></div>
+                  <div className={styles.replRow}><span>Equity Multiple</span><span className={s.positive}>{fmtMult(r.equityMultiple)}</span></div>
+                  <div className={styles.replRow}><span>CAGR</span><span className={s.positive}>{fmtPct(r.cagr)}</span></div>
+                </div>
+
+                <div className={styles.scenarioNotes}>
+                  <textarea
+                    className={s.textarea}
+                    placeholder="Notes for this scenario…"
+                    value={sc.notes}
+                    onChange={e => setSc(i, 'notes', e.target.value)}
+                    style={{ minHeight: 50, fontSize: 11 }}
+                  />
                 </div>
               </div>
             )
@@ -394,7 +625,7 @@ ${refiSection}
                 <div className={s.outputRow}><span className={s.outputLabel}>Net CF Post-Refi</span><span className={s.outputValue}>{fmt$(refiResult.cfPostRefi)}</span></div>
                 <div className={s.outputRow}><span className={s.outputLabel}>Remaining Equity (in Property)</span><span className={s.outputValue}>{fmt$(refiResult.remainingEquity)}</span></div>
                 <div className={s.outputRow}><span className={s.outputLabel}>CoC on Remaining Equity</span><span className={`${s.outputValue} ${s.positive}`}>{fmtPct(refiResult.cocPostRefi)}</span></div>
-                <div className={s.outputRow}><span className={s.outputLabel}>DSCR (Refi)</span><span className={s.outputValue}>{refiResult.refiDSCR.toFixed(2)}x</span></div>
+                <div className={s.outputRow}><span className={s.outputLabel}>DSCR (Refi)</span><span className={s.outputValue}>{fmtMult(refiResult.refiDSCR)}</span></div>
               </div>
             )}
           </>
@@ -408,13 +639,15 @@ ${refiSection}
         scenarios={scenarios}
         calc={calc}
         refi={refi}
+        proj={proj}
+        stress={stress}
         onExport={handleExport}
       />
     </div>
   )
 }
 
-function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, onExport }) {
+function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, stress, onExport }) {
   const p = {
     outer: { width: 460, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', position: 'sticky', top: 0, background: '#fff' },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg-hover)' },
@@ -425,6 +658,7 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     bannerTitle: { fontSize: 11, margin: 0, fontWeight: 700 },
     bannerSub: { fontSize: 7.5, opacity: 0.7 },
     meta: { fontSize: 8.5, color: '#6e7378', marginBottom: 6 },
+    stressBadge: { fontSize: 8, color: '#9a6700', background: '#fffbe6', border: '1px solid #f0cc4a', borderRadius: 3, padding: '3px 8px', marginBottom: 6, fontWeight: 600 },
     grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
     section: { fontSize: 8, fontWeight: 700, color: '#0969da', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #d0d7de', padding: '3px 0 1px', margin: '6px 0 2px' },
     row: { display: 'flex', justifyContent: 'space-between', padding: '1px 3px', fontSize: 8.5, lineHeight: 1.25 },
@@ -458,16 +692,21 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
   ]
   const isCash = sc => sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
   const rowFns = [
-    ['Target Cap Rate', r => fmtPct(r.capRate)],
+    ['Effective Cap', r => fmtPct(r.capRate)],
     ['Acquisition LTV', (r, sc) => isCash(sc) ? 'All Cash' : fmtPct(r.ltv)],
     ['Portfolio Size', r => fmt$M(r.price)],
     ['+ Cash Needed', r => r.additionalCashNeeded > 0 ? fmt$M(r.additionalCashNeeded) : '—'],
-    ['Year-1 NOI', r => fmt$(r.newNOI)],
+    ['Yr-1 NOI', r => fmt$(r.newNOI)],
     ['Net Cash Flow', r => fmt$(r.netCF)],
-    ['CF vs Current', r => `${r.cfDelta >= 0 ? '+' : ''}${fmt$(r.cfDelta)}`],
-    ['DSCR', r => r.dscr > 0 ? `${r.dscr.toFixed(2)}x` : '—'],
     ['Cash-on-Cash', r => fmtPct(r.cashReturn)],
-    ['Total Return', r => fmtPct(r.totalReturn)],
+    ['DSCR', r => r.dscr > 0 ? fmtMult(r.dscr) : '—'],
+  ]
+  const projRows = [
+    [`Yr ${proj.years} Value`, r => fmt$M(r.terminalValue)],
+    [`Cum. CF (${proj.years}y)`, r => fmt$M(r.cumCF)],
+    ['Total $ Returned', r => fmt$M(r.totalReturned)],
+    ['Equity Multiple', r => fmtMult(r.equityMultiple)],
+    ['CAGR', r => fmtPct(r.cagr)],
   ]
   const refiIdx = scenarios.findIndex(sc => sc.mode === 'cashRefi')
   const refiData = refiIdx >= 0 ? calc.results[refiIdx]?.refi : null
@@ -485,6 +724,9 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             <span style={p.bannerSub}>Matthews REIS</span>
           </div>
           <div style={p.meta}>Prepared for: {clientName} — {previewDate}</div>
+          {stress.enabled && (
+            <div style={p.stressBadge}>Stress applied: +{stress.rateBps} bps rates, −{stress.vacancyPct}% NOI</div>
+          )}
 
           <div style={p.grid}>
             <div>
@@ -523,10 +765,11 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
                   <span style={p.deadlineValue}>{fmtDate(calc.close180)}</span>
                 </div>
               </div>
+              <div style={p.row}><span style={p.rowLabel}>Hold Period</span><span style={p.rowValue}>{proj.years} yrs @ {proj.appreciation.toFixed(2)}%/yr</span></div>
             </div>
           </div>
 
-          <div style={p.section}>Replacement Strategies</div>
+          <div style={p.section}>Replacement — Year 1</div>
           <table style={p.table}>
             <thead>
               <tr>
@@ -536,6 +779,24 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             </thead>
             <tbody>
               {rowFns.map(([label, fn], ri) => (
+                <tr key={label} style={ri % 2 === 0 ? p.trAlt : {}}>
+                  <td style={{ ...p.td, ...p.tdFirst }}>{label}</td>
+                  {calc.results.map((r, i) => <td key={i} style={p.td}>{fn(r, scenarios[i])}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={p.section}>Wealth Projection ({proj.years} yrs)</div>
+          <table style={p.table}>
+            <thead>
+              <tr>
+                <th style={{ ...p.th, ...p.thFirst }}></th>
+                {scenarios.map((sc, i) => <th key={i} style={p.th}>{i + 1}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {projRows.map(([label, fn], ri) => (
                 <tr key={label} style={ri % 2 === 0 ? p.trAlt : {}}>
                   <td style={{ ...p.td, ...p.tdFirst }}>{label}</td>
                   {calc.results.map((r, i) => <td key={i} style={p.td}>{fn(r, scenarios[i])}</td>)}
@@ -555,7 +816,7 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             </>
           )}
 
-          <div style={p.footer}>Year-1 estimates. Cash-out refi proceeds are tax-free loan proceeds, not income. For analysis purposes only. — Matthews REIS</div>
+          <div style={p.footer}>Wealth projection assumes {proj.appreciation.toFixed(2)}% annual appreciation on value &amp; NOI, {proj.sellingCostsPct}% selling costs. Cash-out refi proceeds are tax-free loan proceeds, not income. For analysis purposes only. — Matthews REIS</div>
         </div>
       </div>
     </div>
