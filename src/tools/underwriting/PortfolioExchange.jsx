@@ -192,6 +192,7 @@ export default function PortfolioExchange() {
   const [proj, setProj] = useState(DEFAULT_PROJ)
   const [stress, setStress] = useState(DEFAULT_STRESS)
   const [activeGoal, setActiveGoal] = useState(null)
+  const [previewOpen, setPreviewOpen] = useState(true)
 
   const set = (k, v) => setSub(p => ({ ...p, [k]: v }))
   const setSc = (i, k, v) => setScenarios(p => p.map((sc, j) => j === i ? { ...sc, [k]: v } : sc))
@@ -270,29 +271,23 @@ export default function PortfolioExchange() {
     const rowFns = [
       ['Effective Cap Rate', r => fmtPct(r.capRate)],
       ['Acquisition LTV', (r, sc) => isCashMode(sc) ? 'All Cash' : fmtPct(r.ltv)],
-      ['Loan Rate', (r, sc) => isCashMode(sc) ? '—' : `${sc.rate.toFixed(2)}%`],
-      ['Recourse', (r, sc) => isCashMode(sc) ? '—' : (sc.recourse ? 'Recourse' : 'Non-Recourse')],
+      ['Loan Rate / Recourse', (r, sc) => isCashMode(sc) ? '—' : `${sc.rate.toFixed(2)}% · ${sc.recourse ? 'Recourse' : 'Non-Rec'}`],
       ['Portfolio Size', r => fmt$(r.price)],
       ['Acquisition Debt', r => fmt$(r.loanAmt)],
-      ['1031 Equity Used', () => fmt$(calc.equity1031)],
-      ['Additional Cash Needed', r => r.additionalCashNeeded > 0 ? fmt$(r.additionalCashNeeded) : '—'],
+      ['+ Cash Needed', r => r.additionalCashNeeded > 0 ? fmt$(r.additionalCashNeeded) : '—'],
       ['Total Cash Invested', r => fmt$(r.totalCashInvested)],
       ['Year-1 NOI', r => fmt$(r.newNOI)],
       ['Annual Debt Service', r => fmt$(r.annDS)],
       ['Net Cash Flow', r => fmt$(r.netCF)],
       ['CF vs Current', r => `${r.cfDelta >= 0 ? '+' : ''}${fmt$(r.cfDelta)}`],
       ['DSCR', r => r.dscr > 0 ? fmtMult(r.dscr) : '—'],
-      ['Debt Yield', r => r.debtYield > 0 ? fmtPct(r.debtYield) : '—'],
       ['Cash-on-Cash', r => fmtPct(r.cashReturn)],
-      ['Total Return (incl. Yr-1 paydown)', r => fmtPct(r.totalReturn)],
     ]
 
     const projRowFns = [
       [`Terminal Value (Yr ${proj.years})`, r => fmt$(r.terminalValue)],
-      [`Cumulative Cash Flow (${proj.years} yrs)`, r => fmt$(r.cumCF)],
-      [`Principal Paydown (${proj.years} yrs)`, r => fmt$(r.cumPaydown)],
-      ['Remaining Loan Balance', r => fmt$(r.remLoan)],
-      [`Selling Costs (${proj.sellingCostsPct}%)`, r => fmt$(r.sellingCosts)],
+      [`Cumulative CF (${proj.years}y)`, r => fmt$(r.cumCF)],
+      ['Principal Paydown', r => fmt$(r.cumPaydown)],
       ['Net Sale Proceeds', r => fmt$(r.netSaleProceeds)],
       ['Cash Extracted (Refi)', r => r.cashExtractedAtRefi > 0 ? fmt$(r.cashExtractedAtRefi) : '—'],
       ['Total $ Returned', r => fmt$(r.totalReturned)],
@@ -330,31 +325,31 @@ ${scenarios.map((sc, i) => sc.notes && sc.notes.trim() ? `<div class="noteBlock"
 @page{size:letter landscape;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 html,body{margin:0;padding:0}
-body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.3;font-size:8.5px;padding:.3in}
-.banner{background:#101828;color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:4px}
-.banner h1{font-size:12px;margin:0;font-weight:700}
-.banner span{font-size:7.5px;opacity:.7}
-.meta{font-size:8.5px;color:#6e7378;margin-bottom:6px}
-.stressNote{font-size:8px;color:#9a6700;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:3px 8px;margin-bottom:6px;font-weight:600}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.section{font-size:8px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:3px 0 1px;margin:6px 0 2px}
-.row{display:flex;justify-content:space-between;padding:1px 3px;font-size:8.5px;line-height:1.25}
+body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.2;font-size:7.5px;padding:.25in}
+.banner{background:#101828;color:#fff;padding:4px 10px;display:flex;justify-content:space-between;align-items:center;border-radius:3px;margin-bottom:3px}
+.banner h1{font-size:11px;margin:0;font-weight:700}
+.banner span{font-size:7px;opacity:.7}
+.meta{font-size:8px;color:#6e7378;margin-bottom:4px}
+.stressNote{font-size:7.5px;color:#9a6700;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:2px 8px;margin-bottom:4px;font-weight:600}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.section{font-size:7.5px;font-weight:700;color:#0969da;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d0d7de;padding:2px 0 1px;margin:4px 0 1px}
+.row{display:flex;justify-content:space-between;padding:1px 3px;font-size:7.5px;line-height:1.2}
 .row span:first-child{color:#6e7378}.row span:last-child{font-weight:600}
 .alt{background:#f5f7fa}
 .hl{border-top:1px solid #d0d7de;margin-top:2px;padding-top:2px}
 .hl span:last-child{color:#22783c;font-weight:700}
-.deadlines{display:flex;gap:6px;margin:6px 0}
-.deadlines>div{flex:1;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:3px 5px;text-align:center}
-.deadlines span:first-child{color:#6e7378;font-weight:600;display:block;font-size:7.5px}
-.deadlines span:last-child{color:#9a6700;font-weight:700;font-size:9px}
-table{width:100%;border-collapse:collapse;font-size:8px;margin-top:3px}
-th{text-align:right;padding:2px 4px;font-weight:700;border-bottom:1px solid #d0d7de;background:#f5f7fa}
+.deadlines{display:flex;gap:6px;margin:4px 0}
+.deadlines>div{flex:1;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:2px 4px;text-align:center}
+.deadlines span:first-child{color:#6e7378;font-weight:600;display:block;font-size:7px}
+.deadlines span:last-child{color:#9a6700;font-weight:700;font-size:8px}
+table{width:100%;border-collapse:collapse;font-size:7.5px;margin-top:2px}
+th{text-align:right;padding:1.5px 4px;font-weight:700;border-bottom:1px solid #d0d7de;background:#f5f7fa}
 th:first-child{text-align:left}
-td{text-align:right;padding:2px 4px}
+td{text-align:right;padding:1.5px 4px}
 td:first-child{text-align:left;color:#6e7378;font-weight:500}
 tr.alt{background:#fafbfc}
-.noteBlock{font-size:8px;padding:3px 4px;margin-top:2px;color:#1a1a1a}
-.footer{margin-top:6px;font-size:7px;color:#999;border-top:1px solid #d0d7de;padding-top:3px;text-align:center}
+.noteBlock{font-size:7.5px;padding:2px 4px;margin-top:1px;color:#1a1a1a}
+.footer{margin-top:4px;font-size:6.5px;color:#999;border-top:1px solid #d0d7de;padding-top:2px;text-align:center}
 </style></head><body>
 <div class="banner"><h1>PORTFOLIO 1031 EXCHANGE — STRATEGY COMPARISON</h1><span>Matthews Real Estate Investment Services</span></div>
 <div class="meta">Prepared for: ${clientName} &mdash; ${dateStr}</div>
@@ -489,7 +484,7 @@ ${notesSection}
         </div>
 
         <div className={s.sectionLabel}>Replacement Strategies</div>
-        <div className={styles.replGrid} style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className={styles.replGrid} style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           {scenarios.map((sc, i) => {
             const r = calc.results[i]
             const isRefi = sc.mode === 'cashRefi'
@@ -632,22 +627,40 @@ ${notesSection}
         )}
       </div>
 
-      <PortfolioPreview
-        clientName={clientName}
-        previewDate={new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-        sub={sub}
-        scenarios={scenarios}
-        calc={calc}
-        refi={refi}
-        proj={proj}
-        stress={stress}
-        onExport={handleExport}
-      />
+      {previewOpen ? (
+        <PortfolioPreview
+          clientName={clientName}
+          previewDate={new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          sub={sub}
+          scenarios={scenarios}
+          calc={calc}
+          refi={refi}
+          proj={proj}
+          stress={stress}
+          onExport={handleExport}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : (
+        <button
+          onClick={() => setPreviewOpen(true)}
+          style={{
+            position: 'sticky', top: 0, height: 'fit-content',
+            fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
+            color: 'var(--text-muted)', background: 'var(--bg-card)',
+            border: '1px solid var(--border)', borderRadius: 6,
+            padding: '8px 6px', cursor: 'pointer', writingMode: 'vertical-rl',
+            textOrientation: 'mixed', letterSpacing: '0.04em',
+          }}
+          title="Show PDF preview"
+        >
+          ◀ Show Preview
+        </button>
+      )}
     </div>
   )
 }
 
-function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, stress, onExport }) {
+function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, stress, onExport, onClose }) {
   const p = {
     outer: { width: 460, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', position: 'sticky', top: 0, background: '#fff' },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg-hover)' },
@@ -715,7 +728,10 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     <div style={p.outer}>
       <div style={p.header}>
         <span style={p.headerTitle}>PDF Preview</span>
-        <button onClick={onExport} style={{ fontSize: 12, fontWeight: 600, fontFamily: 'inherit', color: '#fff', background: 'var(--accent)', border: 'none', padding: '7px 16px', borderRadius: 6, cursor: 'pointer' }}>Export PDF</button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button onClick={onExport} style={{ fontSize: 12, fontWeight: 600, fontFamily: 'inherit', color: '#fff', background: 'var(--accent)', border: 'none', padding: '7px 16px', borderRadius: 6, cursor: 'pointer' }}>Export PDF</button>
+          <button onClick={onClose} title="Hide preview" style={{ fontSize: 14, fontWeight: 700, fontFamily: 'inherit', color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border)', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
       </div>
       <div style={p.body}>
         <div style={p.wrap}>
