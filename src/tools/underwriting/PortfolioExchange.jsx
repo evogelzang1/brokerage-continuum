@@ -243,6 +243,13 @@ export default function PortfolioExchange() {
       ? { ...sc, properties: sc.properties.filter((_, pj) => pj !== pIdx) }
       : sc
   ))
+  const addScenario = () => setScenarios(p => [...p, {
+    name: `Scenario ${p.length + 1}`,
+    ltv: 40, rate: 6.5, amort: 30, mode: 'leveraged', recourse: true,
+    goalKey: '', notes: '',
+    properties: [{ name: 'Property 1', allocation: 100, capRate: 6.0 }],
+  }])
+  const removeScenario = i => setScenarios(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)
 
   const calc = useMemo(() => {
     const currLoanBal = sub.hasDebt ? sub.currLoanBal : 0
@@ -544,6 +551,20 @@ ${notesSection}
                 {recommended && (
                   <div className={styles.recommendedBadge}>Recommended</div>
                 )}
+                {scenarios.length > 1 && (
+                  <button
+                    onClick={() => removeScenario(i)}
+                    title="Remove scenario"
+                    style={{
+                      position: 'absolute', top: 8, right: 8,
+                      width: 22, height: 22, padding: 0, lineHeight: 1,
+                      fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+                      color: 'var(--text-muted)', background: 'transparent',
+                      border: '1px solid var(--border)', borderRadius: 4,
+                      cursor: 'pointer',
+                    }}
+                  >×</button>
+                )}
                 <input className={styles.replName} value={sc.name} onChange={e => setSc(i, 'name', e.target.value)} placeholder={`Scenario ${i + 1}`} />
                 <div className={styles.replInputs}>
                   {!isCashAcq && <>
@@ -636,6 +657,9 @@ ${notesSection}
               </div>
             )
           })}
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <button onClick={addScenario} className={s.btnSecondary}>+ Add Scenario</button>
         </div>
 
         <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
