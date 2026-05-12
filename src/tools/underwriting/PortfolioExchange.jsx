@@ -28,6 +28,34 @@ function CUMPRINC(rate, nper, pv, start, end) {
   return -total
 }
 
+function PropNumInput({ value, onChange, className, title, placeholder }) {
+  const [focused, setFocused] = useState(false)
+  const [rawText, setRawText] = useState('')
+  const display = focused ? rawText : (value || value === 0 ? String(value) : '')
+  return (
+    <input
+      className={className}
+      type="text"
+      inputMode="decimal"
+      value={display}
+      title={title}
+      placeholder={placeholder}
+      onChange={e => {
+        const raw = e.target.value.replace(/[^0-9.]/g, '')
+        setRawText(raw)
+        if (raw === '' || raw === '.') {
+          onChange(0)
+        } else {
+          const num = parseFloat(raw)
+          if (!isNaN(num)) onChange(num)
+        }
+      }}
+      onFocus={() => { setFocused(true); setRawText(value === 0 ? '' : String(value)) }}
+      onBlur={() => setFocused(false)}
+    />
+  )
+}
+
 function effectiveCap(properties) {
   if (!properties || properties.length === 0) return 0
   const totalAlloc = properties.reduce((s, p) => s + (p.allocation || 0), 0)
@@ -535,21 +563,17 @@ ${notesSection}
                         onChange={e => setProp(i, pi, 'name', e.target.value)}
                         placeholder={`Property ${pi + 1}`}
                       />
-                      <input
+                      <PropNumInput
                         className={styles.propNum}
-                        type="text"
-                        inputMode="decimal"
                         value={prop.allocation}
-                        onChange={e => setProp(i, pi, 'allocation', parseFloat(e.target.value.replace(/[^0-9.]/g, '')) || 0)}
+                        onChange={v => setProp(i, pi, 'allocation', v)}
                         title="Allocation %"
                       />
                       <span className={styles.propUnit}>%</span>
-                      <input
+                      <PropNumInput
                         className={styles.propNum}
-                        type="text"
-                        inputMode="decimal"
                         value={prop.capRate}
-                        onChange={e => setProp(i, pi, 'capRate', parseFloat(e.target.value.replace(/[^0-9.]/g, '')) || 0)}
+                        onChange={v => setProp(i, pi, 'capRate', v)}
                         title="Cap rate %"
                       />
                       <span className={styles.propUnit}>cap</span>
