@@ -291,8 +291,7 @@ export default function PortfolioExchange() {
       ['Annual Debt Service', fmt$(calc.sAnnDS)],
       ['Annual Cash Flow', fmt$(calc.sCF)],
       ['Cash-on-Cash', fmtPct(calc.sCoC)],
-      [`Commission (${sub.commissionPct}%)`, fmt$(calc.brokerComm)],
-      ['Title / Escrow', fmt$(sub.titleEscrow)],
+      ['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)],
     ]
 
     const isCashMode = sc => sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
@@ -725,7 +724,7 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     ['Annual Debt Service', fmt$(calc.sAnnDS)],
     ['Annual Cash Flow', fmt$(calc.sCF)],
     ['Cash-on-Cash', fmtPct(calc.sCoC)],
-    [`Commission (${sub.commissionPct}%)`, fmt$(calc.brokerComm)],
+    ['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)],
   ]
   const isCash = sc => sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
   const rowFns = [
