@@ -88,12 +88,6 @@ const DEFAULT_PROJ = {
   sellingCostsPct: 4.0,     // % of terminal value (exit broker fee + closing)
 }
 
-const DEFAULT_STRESS = {
-  enabled: false,
-  rateBps: 100,             // +bps applied to acquisition + refi loan rates
-  vacancyPct: 5,            // % NOI reduction
-}
-
 const DEFAULT_SCENARIOS = [
   {
     name: 'Maximize Cash Flow',
@@ -123,14 +117,10 @@ const DEFAULT_SCENARIOS = [
 
 const DEFAULT_REFI = { enabled: true, ltv: 50, rate: 6.5, amort: 30 }
 
-function buildScenario(equity1031, minReplacementValue, params, sCF, refi, stress, proj) {
+function buildScenario(equity1031, minReplacementValue, params, sCF, refi, proj) {
   const { ltv, rate, amort, properties } = params
   const lev = ltv / 100
   const cap = effectiveCap(properties) / 100
-
-  // Apply stress to acquisition rate
-  const acqRate = stress.enabled ? rate + stress.rateBps / 100 : rate
-  const vacancyFactor = stress.enabled ? 1 - stress.vacancyPct / 100 : 1
 
   // 1031-safe sizing: ≥ relinquished sale price
   const equityImpliedPrice = lev < 1 ? equity1031 / (1 - lev) : equity1031
@@ -140,9 +130,8 @@ function buildScenario(equity1031, minReplacementValue, params, sCF, refi, stres
   const additionalCashNeeded = Math.max(0, downPayment - equity1031)
   const totalCashInvested = equity1031 + additionalCashNeeded
 
-  const grossNOI = price * cap
-  const newNOI = grossNOI * vacancyFactor
-  const mRate = acqRate / 100 / 12
+  const newNOI = price * cap
+  const mRate = rate / 100 / 12
   const annDS = loanAmt > 0 ? -PMT(mRate, amort * 12, loanAmt) * 12 : 0
   const princRedux = loanAmt > 0 ? -CUMPRINC(mRate, amort * 12, loanAmt, 1, 12) : 0
   const netCF = newNOI - annDS
@@ -152,20 +141,22 @@ function buildScenario(equity1031, minReplacementValue, params, sCF, refi, stres
   const debtYield = loanAmt > 0 ? newNOI / loanAmt : 0
   const cfDelta = netCF - sCF
 
-  // Refi (Scenario 4) — assume executes at t=0 for projection simplicity
+  // Refi (Scenario 4) — modeled as a Year-2 event. Year 1 uses acquisition
+  // terms (all-cash); refi terms apply from Year 2 onward. The cash extracted
+  // is realized at the refi event.
   let refiOut = null
-  let projectionLoanAmt = loanAmt
-  let projectionDS = annDS
-  let projectionRate = mRate
-  let projectionAmort = amort
+  let refiLoan = 0
+  let refiAnnDS = 0
+  let refiMRate = 0
+  let refiAmort = amort
   let cashExtractedAtRefi = 0
   if (refi && refi.enabled) {
     const refiLev = refi.ltv / 100
-    const refiInterestRate = stress.enabled ? refi.rate + stress.rateBps / 100 : refi.rate
-    const refiMRate = refiInterestRate / 100 / 12
-    const refiLoan = price * refiLev
-    const refiAnnDS = refiLoan > 0 ? -PMT(refiMRate, refi.amort * 12, refiLoan) * 12 : 0
-    const refiPrincRedux = refiLoan > 0 ? -CUMPRINC(refiMRate, refi.amort * 12, refiLoan, 1, 12) : 0
+    refiMRate = refi.rate / 100 / 12
+    refiAmort = refi.amort
+    refiLoan = price * refiLev
+    refiAnnDS = refiLoan > 0 ? -PMT(refiMRate, refiAmort * 12, refiLoan) * 12 : 0
+    const refiPrincRedux = refiLoan > 0 ? -CUMPRINC(refiMRate, refiAmort * 12, refiLoan, 1, 12) : 0
     const cashExtracted = refiLoan
     const cfPostRefi = newNOI - refiAnnDS
     const remainingEquity = Math.max(0, price - refiLoan)
@@ -173,34 +164,40 @@ function buildScenario(equity1031, minReplacementValue, params, sCF, refi, stres
     const totalReturnPostRefi = remainingEquity > 0 ? (cfPostRefi + refiPrincRedux) / remainingEquity : 0
     const refiDSCR = refiAnnDS > 0 ? newNOI / refiAnnDS : 0
     refiOut = { refiLoan, refiAnnDS, refiPrincRedux, cashExtracted, cfPostRefi, remainingEquity, cocPostRefi, totalReturnPostRefi, refiDSCR }
-    // Projection uses refi terms from t=0
-    projectionLoanAmt = refiLoan
-    projectionDS = refiAnnDS
-    projectionRate = refiMRate
-    projectionAmort = refi.amort
     cashExtractedAtRefi = cashExtracted
   }
 
-  // Hold-period projection
+  // Hold-period projection. For cashRefi: Year 1 acquisition (no debt service),
+  // Year 2+ uses refi terms. For all other scenarios: same terms throughout.
   const apprRate = (proj.appreciation || 0) / 100
   const years = Math.max(0, Math.floor(proj.years || 0))
+  const hasRefi = refi && refi.enabled
   let cumCF = 0
   for (let y = 1; y <= years; y++) {
     const yrNOI = newNOI * Math.pow(1 + apprRate, y - 1)
-    const yrCF = yrNOI - projectionDS
-    cumCF += yrCF
+    const inRefiPhase = hasRefi && y >= 2
+    const yrDS = inRefiPhase ? refiAnnDS : annDS
+    cumCF += (yrNOI - yrDS)
   }
-  const cumPaydown = (years > 0 && projectionLoanAmt > 0)
-    ? -CUMPRINC(projectionRate, projectionAmort * 12, projectionLoanAmt, 1, years * 12)
+  // Paydown years: full hold for non-refi; years 2..N for refi
+  const paydownYears = hasRefi ? Math.max(0, years - 1) : years
+  const paydownLoanAmt = hasRefi ? refiLoan : loanAmt
+  const paydownRate = hasRefi ? refiMRate : mRate
+  const paydownAmort = hasRefi ? refiAmort : amort
+  const cumPaydown = (paydownYears > 0 && paydownLoanAmt > 0)
+    ? -CUMPRINC(paydownRate, paydownAmort * 12, paydownLoanAmt, 1, paydownYears * 12)
     : 0
-  const remLoan = Math.max(0, projectionLoanAmt - cumPaydown)
+  const remLoan = Math.max(0, paydownLoanAmt - cumPaydown)
   const terminalValue = price * Math.pow(1 + apprRate, years)
   const sellingCosts = terminalValue * (proj.sellingCostsPct / 100)
   const netSaleProceeds = Math.max(0, terminalValue - remLoan - sellingCosts)
   const totalReturned = cashExtractedAtRefi + cumCF + netSaleProceeds
   const equityMultiple = totalCashInvested > 0 ? totalReturned / totalCashInvested : 0
-  const cagr = (totalCashInvested > 0 && totalReturned > 0 && years > 0)
-    ? Math.pow(totalReturned / totalCashInvested, 1 / years) - 1
+  // Signed CAGR: handles negative returns honestly. Total wipeout (≤0) → -100%.
+  const cagr = (totalCashInvested > 0 && years > 0)
+    ? (totalReturned > 0
+        ? Math.pow(totalReturned / totalCashInvested, 1 / years) - 1
+        : -1)
     : 0
 
   return {
@@ -218,7 +215,6 @@ export default function PortfolioExchange() {
   const [scenarios, setScenarios] = useState(DEFAULT_SCENARIOS)
   const [refi, setRefi] = useState(DEFAULT_REFI)
   const [proj, setProj] = useState(DEFAULT_PROJ)
-  const [stress, setStress] = useState(DEFAULT_STRESS)
   const [activeGoal, setActiveGoal] = useState(null)
   const [previewOpen, setPreviewOpen] = useState(true)
   const [showProjection, setShowProjection] = useState(true)
@@ -228,7 +224,6 @@ export default function PortfolioExchange() {
   const setSc = (i, k, v) => setScenarios(p => p.map((sc, j) => j === i ? { ...sc, [k]: v } : sc))
   const setRefiK = (k, v) => setRefi(p => ({ ...p, [k]: v }))
   const setProjK = (k, v) => setProj(p => ({ ...p, [k]: v }))
-  const setStressK = (k, v) => setStress(p => ({ ...p, [k]: v }))
 
   const setProp = (scIdx, pIdx, k, v) => setScenarios(p => p.map((sc, j) =>
     j === scIdx
@@ -278,7 +273,7 @@ export default function PortfolioExchange() {
       const isCashAcq = sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
       const params = isCashAcq ? { ...sc, ltv: 0 } : sc
       const refiCfg = sc.mode === 'cashRefi' ? refi : null
-      return buildScenario(equity1031, sub.salePrice, params, sCF, refiCfg, stress, proj)
+      return buildScenario(equity1031, sub.salePrice, params, sCF, refiCfg, proj)
     })
 
     return {
@@ -287,7 +282,7 @@ export default function PortfolioExchange() {
       totalTaxBill,
       anchorDate, id45, close180, results,
     }
-  }, [sub, scenarios, refi, stress, proj])
+  }, [sub, scenarios, refi, proj])
 
   const refiIdx = scenarios.findIndex(sc => sc.mode === 'cashRefi')
   const refiResult = refiIdx >= 0 ? calc.results[refiIdx]?.refi : null
@@ -357,9 +352,6 @@ export default function PortfolioExchange() {
 <div class="section">Notes</div>
 ${scenarios.map((sc, i) => sc.notes && sc.notes.trim() ? `<div class="noteBlock"><strong>${i + 1}. ${sc.name}:</strong> ${sc.notes}</div>` : '').join('')}` : ''
 
-    const stressNote = stress.enabled
-      ? `<div class="stressNote">Stress applied: +${stress.rateBps} bps on all loan rates, −${stress.vacancyPct}% NOI</div>`
-      : ''
     const recNote = recommendedScenario
       ? `<div class="recBadge">★ Recommended strategy: ${recommendedScenario.name} — aligned with goal "${goalLabel}"</div>`
       : ''
@@ -374,7 +366,6 @@ body{font-family:'Inter',-apple-system,sans-serif;color:#1a1a1a;line-height:1.2;
 .banner h1{font-size:11px;margin:0;font-weight:700}
 .banner span{font-size:7px;opacity:.7}
 .meta{font-size:8px;color:#6e7378;margin-bottom:4px}
-.stressNote{font-size:7.5px;color:#9a6700;background:#fffbe6;border:1px solid #f0cc4a;border-radius:3px;padding:2px 8px;margin-bottom:4px;font-weight:600}
 .recBadge{font-size:7.5px;color:#0969da;background:#dbeafe;border:1px solid #93c5fd;border-radius:3px;padding:2px 8px;margin-bottom:4px;font-weight:600}
 th.recCol{background:#dbeafe;color:#0969da}
 tr td.recCol{background:#eff6ff}
@@ -401,7 +392,6 @@ tr.alt{background:#fafbfc}
 <div class="banner"><h1>PORTFOLIO 1031 EXCHANGE — STRATEGY COMPARISON</h1><span>Matthews Real Estate Investment Services</span></div>
 <div class="meta">Prepared for: ${clientName} &mdash; ${dateStr}</div>
 ${recNote}
-${stressNote}
 <div class="grid">
   <div>
     <div class="section">Relinquished Portfolio</div>
@@ -517,20 +507,6 @@ ${notesSection}
             <CurrencyInput label="Hold Period (yrs)" hint="Years to model the wealth-comparison projection (terminal value, cumulative CF, equity multiple, CAGR)." value={proj.years} onChange={v => setProjK('years', v)} prefix="" />
             <CurrencyInput label="Appreciation (annual)" hint="Annual value + NOI growth rate applied to all scenarios. 2–4% is a reasonable national average; adjust for market." value={proj.appreciation} onChange={v => setProjK('appreciation', v)} prefix="" suffix="%" />
             <CurrencyInput label="Selling Costs (terminal)" hint="% of terminal value spent on exit broker commission, title, transfer tax. 3–5% typical." value={proj.sellingCostsPct} onChange={v => setProjK('sellingCostsPct', v)} prefix="" suffix="%" />
-          </div>
-        )}
-
-        <div className={s.sectionLabel} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          Stress Test
-          <div className={styles.toggleRow}>
-            <button className={`${styles.toggleBtn} ${!stress.enabled ? styles.toggleActive : ''}`} onClick={() => setStressK('enabled', false)}>Off</button>
-            <button className={`${styles.toggleBtn} ${stress.enabled ? styles.toggleActive : ''}`} onClick={() => setStressK('enabled', true)}>Apply</button>
-          </div>
-        </div>
-        {stress.enabled && (
-          <div className={s.inputGrid}>
-            <CurrencyInput label="Rate Stress (bps)" hint="Basis points added to acquisition and refi loan rates. 100 bps = 1% rate hike." value={stress.rateBps} onChange={v => setStressK('rateBps', v)} prefix="" />
-            <CurrencyInput label="Vacancy Stress (% NOI)" hint="Percentage haircut applied to Year-1 NOI to simulate vacancy or rent loss." value={stress.vacancyPct} onChange={v => setStressK('vacancyPct', v)} prefix="" suffix="%" />
           </div>
         )}
 
@@ -720,7 +696,6 @@ ${notesSection}
           calc={calc}
           refi={refi}
           proj={proj}
-          stress={stress}
           activeGoal={activeGoal}
           showProjection={showProjection}
           showClosingCosts={showClosingCosts}
@@ -747,7 +722,7 @@ ${notesSection}
   )
 }
 
-function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, stress, activeGoal, showProjection, showClosingCosts, onExport, onClose }) {
+function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi, proj, activeGoal, showProjection, showClosingCosts, onExport, onClose }) {
   const recommendedIdx = activeGoal ? scenarios.findIndex(sc => sc.goalKey === activeGoal) : -1
   const recommendedScenario = recommendedIdx >= 0 ? scenarios[recommendedIdx] : null
   const goalLabel = activeGoal && GOALS[activeGoal] ? GOALS[activeGoal] : ''
@@ -761,7 +736,6 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     bannerTitle: { fontSize: 11, margin: 0, fontWeight: 700 },
     bannerSub: { fontSize: 7.5, opacity: 0.7 },
     meta: { fontSize: 8.5, color: '#6e7378', marginBottom: 6 },
-    stressBadge: { fontSize: 8, color: '#9a6700', background: '#fffbe6', border: '1px solid #f0cc4a', borderRadius: 3, padding: '3px 8px', marginBottom: 6, fontWeight: 600 },
     recBadge: { fontSize: 8, color: '#0969da', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: 3, padding: '3px 8px', marginBottom: 6, fontWeight: 600 },
     recTh: { background: '#dbeafe', color: '#0969da' },
     recTd: { background: '#eff6ff' },
@@ -835,9 +809,6 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
           <div style={p.meta}>Prepared for: {clientName} — {previewDate}</div>
           {recommendedScenario && (
             <div style={p.recBadge}>★ Recommended strategy: {recommendedScenario.name} — aligned with goal "{goalLabel}"</div>
-          )}
-          {stress.enabled && (
-            <div style={p.stressBadge}>Stress applied: +{stress.rateBps} bps rates, −{stress.vacancyPct}% NOI</div>
           )}
 
           <div style={p.grid}>

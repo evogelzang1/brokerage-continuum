@@ -64,7 +64,7 @@ export default function ExchangeAnalysis() {
     const sROE = sEquity > 0 ? sCF / sEquity : 0
 
     const brokerComm = salePrice * (sub.commissionPct / 100)
-    const equity1031 = salePrice - sub.currLoanBal - sub.titleEscrow - brokerComm
+    const equity1031 = Math.max(0, salePrice - sub.currLoanBal - sub.titleEscrow - brokerComm)
 
     // 1031 deadlines run from the relinquished close — not "today."
     const closeBase = sub.estimatedCloseDate ? new Date(sub.estimatedCloseDate + 'T00:00:00') : new Date()
@@ -76,7 +76,9 @@ export default function ExchangeAnalysis() {
       const price = r.capRate > 0 ? r.noi / (r.capRate / 100) : 0
       const capRate = r.capRate / 100
       // 1031-safe check: replacement price must be ≥ relinquished sale price.
-      // Any shortfall is mortgage/equity boot that becomes taxable.
+      // Any shortfall is taxable boot — combines cash boot (equity not
+      // reinvested) and mortgage boot (debt not replaced) since this tool
+      // doesn't model outside-cash injection.
       const boot = Math.max(0, salePrice - price)
 
       if (!replDebt) {
@@ -123,7 +125,7 @@ export default function ExchangeAnalysis() {
       ['Return on Equity', fmtPct(calc.sROE)],
       ...(showClosingCosts ? [['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)]] : []),
     ]
-    const bootRow = ['Mortgage Boot (taxable)', o => o.boot > 0 ? fmt$(o.boot) : '—']
+    const bootRow = ['Boot (taxable)', o => o.boot > 0 ? fmt$(o.boot) : '—']
     const replMetrics = replDebt
       ? [['NOI', o => fmt$(o.noi)], ['Purchase Price', o => fmt$(o.price)], ['Cap Rate', o => fmtPct(o.capRate)],
          bootRow,
@@ -283,7 +285,7 @@ ${calc.totalTaxBill > 0
               <div className={styles.replResults}>
                 <div className={styles.replRow}><span>Purchase Price</span><span>{fmt$(opt.price)}</span></div>
                 {opt.boot > 0 && (
-                  <div className={`${styles.replRow} ${s.warning}`}><span>Mortgage Boot (taxable)</span><span>{fmt$(opt.boot)}</span></div>
+                  <div className={`${styles.replRow} ${s.warning}`}><span>Boot (taxable)</span><span>{fmt$(opt.boot)}</span></div>
                 )}
                 <div className={styles.replRow}><span>1031 Equity</span><span>{fmt$(calc.equity1031)}</span></div>
                 {replDebt && <>
