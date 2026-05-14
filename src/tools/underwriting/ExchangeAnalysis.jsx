@@ -17,7 +17,10 @@ function PMT(rate, nper, pv) {
 function CUMPRINC(rate, nper, pv, start, end) {
   let total = 0, balance = pv
   const payment = -PMT(rate, nper, pv)
-  for (let i = 1; i <= end; i++) {
+  // Clamp end at nper — past the loan's natural maturity, balance hits 0 and
+  // the loop would otherwise over-accumulate principal beyond pv.
+  const safeEnd = Math.min(end, nper)
+  for (let i = 1; i <= safeEnd; i++) {
     const interest = balance * rate
     const principal = payment - interest
     if (i >= start) total += principal
@@ -25,6 +28,10 @@ function CUMPRINC(rate, nper, pv, start, end) {
   }
   return -total
 }
+
+// Add N calendar days to a Date, DST-safe (raw ms arithmetic lands at 23:00
+// the previous day when the window crosses a fall-back DST transition).
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 
 const EMPTY_REPL = { name: '', noi: 0, capRate: 6.5, leaseType: 'Absolute Net', leaseYears: 20, rentIncreases: '10% Every 5 Yrs', rate: 6, amort: 30 }
 
@@ -69,27 +76,32 @@ export default function ExchangeAnalysis() {
     // 1031 deadlines run from the relinquished close — not "today."
     const closeBase = sub.estimatedCloseDate ? new Date(sub.estimatedCloseDate + 'T00:00:00') : new Date()
     const anchorDate = isNaN(closeBase.getTime()) ? new Date() : closeBase
-    const id45 = new Date(anchorDate.getTime() + 45 * 86400000)
-    const close180 = new Date(anchorDate.getTime() + 180 * 86400000)
+    const id45 = addDays(anchorDate, 45)
+    const close180 = addDays(anchorDate, 180)
 
     const options = repls.map(r => {
       const price = r.capRate > 0 ? r.noi / (r.capRate / 100) : 0
       const capRate = r.capRate / 100
-      // 1031-safe check: replacement price must be ≥ relinquished sale price.
-      // Any shortfall is taxable boot — combines cash boot (equity not
-      // reinvested) and mortgage boot (debt not replaced) since this tool
-      // doesn't model outside-cash injection.
-      const boot = Math.max(0, salePrice - price)
 
       if (!replDebt) {
+        // All-cash mode: deployed cash = price; outside cash plugs any gap above equity1031.
+        const additionalCash = price - equity1031  // +ve = needs outside cash, -ve = cash returned
+        const outsideCash = Math.max(0, additionalCash)
+        // Taxable boot: cash boot (excess equity returned) + mortgage boot
+        // (relinquished debt not offset by outside cash).
+        const cashBoot = Math.max(0, equity1031 - price)
+        const mortgageBoot = Math.max(0, sub.currLoanBal - outsideCash)
+        const taxableBoot = cashBoot + mortgageBoot
         return {
-          capRate, price, boot, downPayment: equity1031, additionalCash: price - equity1031,
-          cashOnCash: equity1031 > 0 ? r.noi / equity1031 : 0,
+          capRate, price, taxableBoot, cashBoot, mortgageBoot,
+          downPayment: equity1031, additionalCash,
+          cashOnCash: price > 0 ? r.noi / price : 0,
           cfDelta: r.noi - sCF, ...r,
         }
       }
 
       const loanAmt = Math.max(0, price - equity1031)
+      const downPayment = Math.min(price, equity1031)
       const ltv = price > 0 ? loanAmt / price : 0
       const mRate = r.rate / 100 / 12
       const annDS = loanAmt > 0 ? -PMT(mRate, r.amort * 12, loanAmt) * 12 : 0
@@ -97,13 +109,19 @@ export default function ExchangeAnalysis() {
       const dscr = annDS > 0 ? r.noi / annDS : 0
       const debtYield = loanAmt > 0 ? r.noi / loanAmt : 0
       const netCash = r.noi - annDS
-      const cashReturn = equity1031 > 0 ? netCash / equity1031 : 0
-      const totalReturn = equity1031 > 0 ? (princRedux + netCash) / equity1031 : 0
+      // CoC denominated in actual cash deployed (handles the rare downsize case where price < equity1031).
+      const cashReturn = downPayment > 0 ? netCash / downPayment : 0
+      const totalReturn = downPayment > 0 ? (princRedux + netCash) / downPayment : 0
       const cfDelta = netCash - sCF
+      // Taxable boot: with-debt mode doesn't model outside-cash injection.
+      const cashBoot = Math.max(0, equity1031 - downPayment)
+      const mortgageBoot = Math.max(0, sub.currLoanBal - loanAmt)
+      const taxableBoot = cashBoot + mortgageBoot
 
       return {
-        capRate, price, boot, loanAmt, ltv, annDS, princRedux, dscr, debtYield,
-        netCash, cashReturn, totalReturn, equity: equity1031, cfDelta, ...r,
+        capRate, price, taxableBoot, cashBoot, mortgageBoot,
+        loanAmt, ltv, annDS, princRedux, dscr, debtYield,
+        netCash, cashReturn, totalReturn, equity: downPayment, cfDelta, ...r,
       }
     })
 
@@ -125,7 +143,9 @@ export default function ExchangeAnalysis() {
       ['Return on Equity', fmtPct(calc.sROE)],
       ...(showClosingCosts ? [['Closing Costs', fmt$(calc.brokerComm + sub.titleEscrow)]] : []),
     ]
-    const bootRow = ['Boot (taxable)', o => o.boot > 0 ? fmt$(o.boot) : '—']
+    const bootRow = ['Boot (taxable)', o => o.taxableBoot > 0 ? fmt$(o.taxableBoot) : '—']
+    // Sign-aware additional cash: +ve = cash brought from outside, -ve = cash returned (taxable boot).
+    const fmtSigned = v => v >= 0 ? `+${fmt$(v)}` : `-${fmt$(Math.abs(v))}`
     const replMetrics = replDebt
       ? [['NOI', o => fmt$(o.noi)], ['Purchase Price', o => fmt$(o.price)], ['Cap Rate', o => fmtPct(o.capRate)],
          bootRow,
@@ -135,7 +155,8 @@ export default function ExchangeAnalysis() {
          ['CF vs Subject', o => `${o.cfDelta >= 0 ? '+' : ''}${fmt$(o.cfDelta)}/yr`]]
       : [['NOI', o => fmt$(o.noi)], ['Purchase Price', o => fmt$(o.price)], ['Cap Rate', o => fmtPct(o.capRate)],
          bootRow,
-         ['1031 Equity', () => fmt$(calc.equity1031)], ['Additional Cash', o => fmt$(o.additionalCash)],
+         ['1031 Equity', () => fmt$(calc.equity1031)],
+         ['Additional Cash (+ needed / – returned)', o => fmtSigned(o.additionalCash)],
          ['Cash-on-Cash', o => fmtPct(o.cashOnCash)], ['CF vs Subject', o => `${o.cfDelta >= 0 ? '+' : ''}${fmt$(o.cfDelta)}/yr`],
          ['Lease Type', o => o.leaseType], ['Lease Years', o => String(o.leaseYears)]]
 
@@ -175,7 +196,7 @@ tr.alt{background:#fafbfc}
 <div>
 <div class="section">Relinquished Property</div>
 ${subRows.map(([l,v],i)=>`<div class="row ${i%2?'alt':''}"><span>${l}</span><span>${v}</span></div>`).join('')}
-<div class="row hl"><span>Total Equity for 1031</span><span>${fmt$(calc.equity1031)}</span></div>
+<div class="row hl"><span>Net 1031 Equity</span><span>${fmt$(calc.equity1031)}</span></div>
 </div>
 <div>
 <div class="section">1031 Exchange Mechanics</div>
@@ -194,14 +215,19 @@ ${calc.totalTaxBill > 0
     openHtml(html)
   }
 
+  const fmtSignedPreview = v => v >= 0 ? `+${fmt$(v)}` : `-${fmt$(Math.abs(v))}`
+  const bootRowPreview = ['Boot (taxable)', o => o.taxableBoot > 0 ? fmt$(o.taxableBoot) : '—']
   const replMetricsPreview = replDebt
     ? [['NOI', o => fmt$(o.noi)], ['Purchase Price', o => fmt$(o.price)], ['Cap Rate', o => fmtPct(o.capRate)],
+       bootRowPreview,
        ['Loan Amount', o => fmt$(o.loanAmt)], ['LTV', o => fmtPct(o.ltv)],
        ['Debt Service (Ann)', o => fmt$(o.annDS)], ['DSCR', o => o.dscr.toFixed(2) + 'x'],
        ['Net Cash (Annual)', o => fmt$(o.netCash)], ['Cash Return', o => fmtPct(o.cashReturn)],
        ['Total Return', o => fmtPct(o.totalReturn)], ['CF vs Subject', o => fmt$(o.cfDelta)]]
     : [['NOI', o => fmt$(o.noi)], ['Purchase Price', o => fmt$(o.price)], ['Cap Rate', o => fmtPct(o.capRate)],
-       ['1031 Equity', () => fmt$(calc.equity1031)], ['Additional Cash', o => fmt$(o.additionalCash)],
+       bootRowPreview,
+       ['1031 Equity', () => fmt$(calc.equity1031)],
+       ['Additional Cash (+ needed / – returned)', o => fmtSignedPreview(o.additionalCash)],
        ['Cash-on-Cash', o => fmtPct(o.cashOnCash)], ['CF vs Subject', o => fmt$(o.cfDelta)]]
 
   const previewDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -284,8 +310,13 @@ ${calc.totalTaxBill > 0
               </div>
               <div className={styles.replResults}>
                 <div className={styles.replRow}><span>Purchase Price</span><span>{fmt$(opt.price)}</span></div>
-                {opt.boot > 0 && (
-                  <div className={`${styles.replRow} ${s.warning}`}><span>Boot (taxable)</span><span>{fmt$(opt.boot)}</span></div>
+                {opt.taxableBoot > 0 && (
+                  <div
+                    className={`${styles.replRow} ${s.warning}`}
+                    title={`Cash boot: ${fmt$(opt.cashBoot)} (unspent 1031 equity) + Mortgage boot: ${fmt$(opt.mortgageBoot)} (debt relief not offset by replacement debt or outside cash)`}
+                  >
+                    <span>Boot (taxable)</span><span>{fmt$(opt.taxableBoot)}</span>
+                  </div>
                 )}
                 <div className={styles.replRow}><span>1031 Equity</span><span>{fmt$(calc.equity1031)}</span></div>
                 {replDebt && <>
@@ -419,7 +450,7 @@ function Preview1031({ clientName, previewDate, sub, calc, repls, replDebt, repl
                 </div>
               ))}
               <div style={{ ...p.row, ...p.hl }}>
-                <span style={p.rowLabel}>Total Equity for 1031</span>
+                <span style={p.rowLabel}>Net 1031 Equity</span>
                 <span style={p.hlValue}>{fmt$(calc.equity1031)}</span>
               </div>
             </div>

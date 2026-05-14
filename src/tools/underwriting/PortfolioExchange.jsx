@@ -19,7 +19,10 @@ function PMT(rate, nper, pv) {
 function CUMPRINC(rate, nper, pv, start, end) {
   let total = 0, balance = pv
   const payment = -PMT(rate, nper, pv)
-  for (let i = 1; i <= end; i++) {
+  // Clamp end at nper — past the loan's natural maturity, balance hits 0 and
+  // the loop would otherwise over-accumulate principal beyond pv.
+  const safeEnd = Math.min(end, nper)
+  for (let i = 1; i <= safeEnd; i++) {
     const interest = balance * rate
     const principal = payment - interest
     if (i >= start) total += principal
@@ -27,6 +30,10 @@ function CUMPRINC(rate, nper, pv, start, end) {
   }
   return -total
 }
+
+// Add N calendar days to a Date, DST-safe (raw ms arithmetic lands at 23:00
+// the previous day when the window crosses a fall-back DST transition).
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 
 function PropNumInput({ value, onChange, className, title, placeholder }) {
   const [focused, setFocused] = useState(false)
@@ -133,12 +140,9 @@ function buildScenario(equity1031, minReplacementValue, params, sCF, refi, proj)
   const newNOI = price * cap
   const mRate = rate / 100 / 12
   const annDS = loanAmt > 0 ? -PMT(mRate, amort * 12, loanAmt) * 12 : 0
-  const princRedux = loanAmt > 0 ? -CUMPRINC(mRate, amort * 12, loanAmt, 1, 12) : 0
   const netCF = newNOI - annDS
   const cashReturn = totalCashInvested > 0 ? netCF / totalCashInvested : 0
-  const totalReturn = totalCashInvested > 0 ? (netCF + princRedux) / totalCashInvested : 0
   const dscr = annDS > 0 ? newNOI / annDS : 0
-  const debtYield = loanAmt > 0 ? newNOI / loanAmt : 0
   const cfDelta = netCF - sCF
 
   // Refi (Scenario 4) — modeled as a Year-2 event. Year 1 uses acquisition
@@ -156,14 +160,12 @@ function buildScenario(equity1031, minReplacementValue, params, sCF, refi, proj)
     refiAmort = refi.amort
     refiLoan = price * refiLev
     refiAnnDS = refiLoan > 0 ? -PMT(refiMRate, refiAmort * 12, refiLoan) * 12 : 0
-    const refiPrincRedux = refiLoan > 0 ? -CUMPRINC(refiMRate, refiAmort * 12, refiLoan, 1, 12) : 0
     const cashExtracted = refiLoan
     const cfPostRefi = newNOI - refiAnnDS
     const remainingEquity = Math.max(0, price - refiLoan)
     const cocPostRefi = remainingEquity > 0 ? cfPostRefi / remainingEquity : 0
-    const totalReturnPostRefi = remainingEquity > 0 ? (cfPostRefi + refiPrincRedux) / remainingEquity : 0
     const refiDSCR = refiAnnDS > 0 ? newNOI / refiAnnDS : 0
-    refiOut = { refiLoan, refiAnnDS, refiPrincRedux, cashExtracted, cfPostRefi, remainingEquity, cocPostRefi, totalReturnPostRefi, refiDSCR }
+    refiOut = { refiLoan, refiAnnDS, cashExtracted, cfPostRefi, remainingEquity, cocPostRefi, refiDSCR }
     cashExtractedAtRefi = cashExtracted
   }
 
@@ -201,8 +203,8 @@ function buildScenario(equity1031, minReplacementValue, params, sCF, refi, proj)
     : 0
 
   return {
-    price, loanAmt, ltv: lev, newNOI, capRate: cap, annDS, princRedux,
-    netCF, cashReturn, totalReturn, dscr, debtYield, cfDelta,
+    price, loanAmt, ltv: lev, newNOI, capRate: cap, annDS,
+    netCF, cashReturn, dscr, cfDelta,
     additionalCashNeeded, totalCashInvested, refi: refiOut,
     terminalValue, cumCF, cumPaydown, remLoan, sellingCosts, netSaleProceeds,
     totalReturned, equityMultiple, cagr, cashExtractedAtRefi,
@@ -266,8 +268,8 @@ export default function PortfolioExchange() {
     // enters the estimated close date; falls back to today if blank/invalid.
     const closeBase = sub.estimatedCloseDate ? new Date(sub.estimatedCloseDate + 'T00:00:00') : new Date()
     const anchorDate = isNaN(closeBase.getTime()) ? new Date() : closeBase
-    const id45 = new Date(anchorDate.getTime() + 45 * 86400000)
-    const close180 = new Date(anchorDate.getTime() + 180 * 86400000)
+    const id45 = addDays(anchorDate, 45)
+    const close180 = addDays(anchorDate, 180)
 
     const results = scenarios.map(sc => {
       const isCashAcq = sc.mode === 'cashOnly' || sc.mode === 'cashRefi'
@@ -317,7 +319,9 @@ export default function PortfolioExchange() {
       ['Net Cash Flow', r => fmt$(r.netCF)],
       ['CF vs Current', r => `${r.cfDelta >= 0 ? '+' : ''}${fmt$(r.cfDelta)}`],
       ['DSCR', r => r.dscr > 0 ? fmtMult(r.dscr) : '—'],
-      ['Cash-on-Cash', r => fmtPct(r.cashReturn)],
+      // Year-1 label disambiguates Scenario 4 (cashRefi): Year 1 has no debt service since
+      // the refi event is Year 2. Steady-state post-refi CoC is in the dedicated refi card below.
+      ['Yr-1 Cash-on-Cash', r => fmtPct(r.cashReturn)],
     ]
 
     const projRowFns = [
@@ -432,7 +436,7 @@ ${showProjection ? `<div class="section">Hold-Period Projection (${proj.years} y
 ${refiSection}
 ${notesSection}
 
-<div class="footer">Year-1 estimates + ${proj.years}-yr projection assume ${proj.appreciation.toFixed(2)}% annual appreciation on value &amp; NOI, ${proj.sellingCostsPct}% selling costs. Cash-out refi proceeds are tax-free loan proceeds, not income. For analysis purposes only — consult a qualified tax/legal professional. &mdash; Matthews REIS</div>
+<div class="footer">Year-1 estimates + ${proj.years}-yr projection assume ${proj.appreciation.toFixed(2)}% annual appreciation on value &amp; NOI, ${proj.sellingCostsPct}% selling costs. Cash-out refi modeled as a Year 2+ event — a same-year pre-planned refi can be recharacterized as taxable boot under step-transaction doctrine; standard practice is a 1–2 year gap. Refi proceeds are then tax-free loan proceeds, not income. For analysis purposes only — consult a qualified tax/legal professional. &mdash; Matthews REIS</div>
 </body></html>`
 
     openHtml(html)
@@ -630,7 +634,7 @@ ${notesSection}
                     <span>CF vs Current</span><span>{r.cfDelta >= 0 ? '+' : ''}{fmt$(r.cfDelta)}</span>
                   </div>
                   <div className={styles.replRow}><span>DSCR</span><span>{r.dscr > 0 ? fmtMult(r.dscr) : '—'}</span></div>
-                  <div className={styles.replRow}><span>Cash-on-Cash</span><span className={s.positive}>{fmtPct(r.cashReturn)}</span></div>
+                  <div className={styles.replRow}><span>Yr-1 Cash-on-Cash</span><span className={s.positive}>{fmtPct(r.cashReturn)}</span></div>
                   {showProjection && <>
                     <div className={styles.replRow} style={{ borderTop: '1px dashed var(--border)', paddingTop: 4, marginTop: 4 }}><span>Yr {proj.years} Value</span><span>{fmt$M(r.terminalValue)}</span></div>
                     <div className={styles.replRow}><span>Cum. CF ({proj.years}y)</span><span>{fmt$M(r.cumCF)}</span></div>
@@ -778,7 +782,7 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
     ['+ Cash Needed', r => r.additionalCashNeeded > 0 ? fmt$M(r.additionalCashNeeded) : '—'],
     ['Yr-1 NOI', r => fmt$(r.newNOI)],
     ['Net Cash Flow', r => fmt$(r.netCF)],
-    ['Cash-on-Cash', r => fmtPct(r.cashReturn)],
+    ['Yr-1 Cash-on-Cash', r => fmtPct(r.cashReturn)],
     ['DSCR', r => r.dscr > 0 ? fmtMult(r.dscr) : '—'],
   ]
   const projRows = [
@@ -907,7 +911,7 @@ function PortfolioPreview({ clientName, previewDate, sub, scenarios, calc, refi,
             </>
           )}
 
-          <div style={p.footer}>Wealth projection assumes {proj.appreciation.toFixed(2)}% annual appreciation on value &amp; NOI, {proj.sellingCostsPct}% selling costs. Cash-out refi proceeds are tax-free loan proceeds, not income. For analysis purposes only. — Matthews REIS</div>
+          <div style={p.footer}>Wealth projection assumes {proj.appreciation.toFixed(2)}% annual appreciation on value &amp; NOI, {proj.sellingCostsPct}% selling costs. Refi modeled Yr 2+ to avoid step-transaction recharacterization; proceeds are then tax-free loan proceeds, not income. For analysis purposes only. — Matthews REIS</div>
         </div>
       </div>
     </div>
